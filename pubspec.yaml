@@ -1,0 +1,47 @@
+name: zovetica
+description: Smart Healthcare for Your Beloved Pets
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=2.19.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.2
+  
+  # Backend - Supabase (replaces Firebase)
+  supabase_flutter: ^2.3.0
+  
+  image_picker: ^1.1.1
+  image_cropper: ^8.0.0
+
+  # UI / Utilities
+  fluttertoast: ^9.0.0
+  shared_preferences: ^2.1.1
+  geolocator: ^14.0.2
+  geocoding: ^4.0.0
+
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  
+  # Add custom fonts if needed
+  # fonts:
+  #   - family: Poppins
+  #     fonts:
+  #       - asset: fonts/Poppins-Regular.ttf
+  #       - asset: fonts/Poppins-Medium.ttf
+  #         weight: 500
+  #       - asset: fonts/Poppins-Bold.ttf
+  #         weight: 700
+
+  # Add assets if needed
+  # assets:
+  #   - images/

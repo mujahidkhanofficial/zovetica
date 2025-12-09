@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "353151624312",
+    "project_id": "zovetica-2cbf9",
+    "storage_bucket": "zovetica-2cbf9.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:353151624312:android:4cc3762a320deec76f798d",
+        "android_client_info": {
+          "package_name": "com.example.zovetica"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCfOZ_ukK1Lvz-6Ep2SImZbwkHJbpkm96c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
