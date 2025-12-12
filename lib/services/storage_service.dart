@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase_service.dart';
 
@@ -29,7 +30,7 @@ class StorageService {
       final publicUrl = _client.storage.from(bucket).getPublicUrl(filePath);
       return publicUrl;
     } catch (e) {
-      print('Error uploading image: $e');
+      debugPrint('Error uploading image: $e');
       return null;
     }
   }
@@ -61,7 +62,7 @@ class StorageService {
     try {
       await _client.storage.from(bucket).remove([path]);
     } catch (e) {
-      print('Error deleting file: $e');
+      debugPrint('Error deleting file: $e');
     }
   }
 

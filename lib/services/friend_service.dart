@@ -1,9 +1,13 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter/foundation.dart';
 import 'supabase_service.dart';
+import 'notification_service.dart';
+import 'user_service.dart';
 
 class FriendService {
   final _client = SupabaseService.client;
   final String _tableName = 'friendships';
+  final NotificationService _notificationService = NotificationService();
+  final UserService _userService = UserService();
 
   /// Get status of friendship between current user and [otherUserId]
   /// Returns: 'none', 'pending_sent', 'pending_received', 'accepted', 'blocked'
@@ -28,7 +32,7 @@ class FriendService {
       }
       return status; // 'accepted' or 'blocked'
     } catch (e) {
-      print('Error checking friendship status: $e');
+      debugPrint('Error checking friendship status: $e');
       return 'none';
     }
   }
@@ -44,9 +48,23 @@ class FriendService {
         'receiver_id': receiverId,
         'status': 'pending',
       });
+
+      // Get current user's name for notification
+      final myData = await _userService.getCurrentUser();
+      final myName = myData?['name'] ?? 'Someone';
+
+      // Send notification to receiver
+      await _notificationService.createNotification(
+        userId: receiverId,
+        type: 'friend_request',
+        title: 'New Friend Request',
+        body: '$myName wants to be your friend',
+        relatedId: myId,
+      );
+
       return true;
     } catch (e) {
-      print('Error sending friend request: $e');
+      debugPrint('Error sending friend request: $e');
       return false;
     }
   }
@@ -62,9 +80,23 @@ class FriendService {
           .from(_tableName)
           .update({'status': 'accepted'})
           .match({'requester_id': senderId, 'receiver_id': myId});
+
+      // Get my name for notification
+      final myData = await _userService.getCurrentUser();
+      final myName = myData?['name'] ?? 'Someone';
+
+      // Send notification to original requester
+      await _notificationService.createNotification(
+        userId: senderId,
+        type: 'friend_accepted',
+        title: 'Friend Request Accepted',
+        body: '$myName accepted your friend request',
+        relatedId: myId,
+      );
+
       return true;
     } catch (e) {
-      print('Error accepting friend request: $e');
+      debugPrint('Error accepting friend request: $e');
       return false;
     }
   }
@@ -81,7 +113,7 @@ class FriendService {
           .or('and(requester_id.eq.$myId,receiver_id.eq.$otherUserId),and(requester_id.eq.$otherUserId,receiver_id.eq.$myId)');
       return true;
     } catch (e) {
-      print('Error removing friendship: $e');
+      debugPrint('Error removing friendship: $e');
       return false;
     }
   }
@@ -97,7 +129,7 @@ class FriendService {
           .select('requester_id')
           .match({'receiver_id': myId, 'status': 'pending'});
 
-      if (response == null || (response as List).isEmpty) return [];
+      if ((response as List).isEmpty) return [];
 
       final requesterIds = (response as List).map((r) => r['requester_id']).toList();
 
@@ -109,7 +141,7 @@ class FriendService {
 
       return List<Map<String, dynamic>>.from(profiles);
     } catch (e) {
-      print('Error fetching friend requests: $e');
+      debugPrint('Error fetching friend requests: $e');
       return [];
     }
   }
@@ -126,7 +158,7 @@ class FriendService {
           .select()
           .or('and(requester_id.eq.$myId,status.eq.accepted),and(receiver_id.eq.$myId,status.eq.accepted)');
 
-      if (response == null || (response as List).isEmpty) return [];
+      if ((response as List).isEmpty) return [];
 
       // 2. Extract friend IDs
       final friendIds = (response as List).map((r) {
@@ -141,7 +173,7 @@ class FriendService {
 
       return List<Map<String, dynamic>>.from(profiles);
     } catch (e) {
-      print('Error fetching friends: $e');
+      debugPrint('Error fetching friends: $e');
       return [];
     }
   }

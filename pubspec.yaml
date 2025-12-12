@@ -22,13 +22,20 @@ dependencies:
   shared_preferences: ^2.1.1
   geolocator: ^14.0.2
   geocoding: ^4.0.0
-
+  crop_image: ^1.0.16
+  flutter_dotenv: ^5.1.0
+  timeago: ^3.6.1
+  intl: ^0.19.0
+  http: ^1.2.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  mockito: ^5.4.4
+  build_runner: ^2.4.9
 
+  supabase: any
 flutter:
   uses-material-design: true
   
@@ -42,6 +49,5 @@ flutter:
   #       - asset: fonts/Poppins-Bold.ttf
   #         weight: 700
 
-  # Add assets if needed
-  # assets:
-  #   - images/
+  assets:
+    - .env

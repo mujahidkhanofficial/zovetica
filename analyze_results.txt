@@ -1,0 +1,56 @@
+﻿Analyzing lib...
+
+warning - screens\add_pet_screen.dart:4:8 - Unused import: 'package:image_cropper/image_cropper.dart'. Try removing the import directive. - unused_import
+warning - screens\add_pet_screen.dart:11:8 - Unused import: '../widgets/enterprise_header.dart'. Try removing the import directive. - unused_import
+warning - screens\add_pet_screen.dart:26:21 - The value of the field '_picker' isn't used. Try removing the field, or using it. - unused_field
+warning - screens\appointment_screen.dart:6:8 - Unused import: '../widgets/enterprise_header.dart'. Try removing the import directive. - unused_import
+warning - screens\community_screen.dart:9:8 - Unused import: '../widgets/enterprise_header.dart'. Try removing the import directive. - unused_import
+warning - screens\community_screen.dart:11:8 - Unused import: '../services/supabase_service.dart'. Try removing the import directive. - unused_import
+warning - screens\community_screen.dart:33:8 - The value of the field '_isLoading' isn't used. Try removing the field, or using it. - unused_field
+warning - screens\community_screen.dart:121:39 - The value of the field '_doubleTapControllers' isn't used. Try removing the field, or using it. - unused_field
+warning - screens\community_screen.dart:960:10 - The declaration '_buildComment' isn't referenced. Try removing the declaration of '_buildComment'. - unused_element
+warning - screens\doctor_screen.dart:8:8 - Unused import: '../widgets/enterprise_header.dart'. Try removing the import directive. - unused_import
+warning - screens\emergency_screen.dart:4:8 - Unused import: '../theme/app_gradients.dart'. Try removing the import directive. - unused_import
+warning - screens\friends_screen.dart:2:8 - Unused import: '../models/app_models.dart'. Try removing the import directive. - unused_import
+warning - screens\home_screen.dart:11:8 - Unused import: 'medication_screen.dart'. Try removing the import directive. - unused_import
+warning - screens\home_screen.dart:13:8 - Unused import: 'auth_screen.dart'. Try removing the import directive. - unused_import
+warning - screens\home_screen.dart:30:21 - The value of the field '_authService' isn't used. Try removing the field, or using it. - unused_field
+warning - screens\home_screen.dart:37:21 - The value of the field '_upcomingAppointments' isn't used. Try removing the field, or using it. - unused_field
+warning - screens\home_screen.dart:334:39 - The operand can't be 'null', so the condition is always 'true'. Remove the condition. - unnecessary_null_comparison
+warning - screens\home_screen.dart:335:71 - The '!' will have no effect because the receiver can't be null. Try removing the '!' operator. - unnecessary_non_null_assertion
+warning - screens\home_screen.dart:339:37 - The operand can't be 'null', so the condition is always 'false'. Try removing the condition, an enclosing condition, or the whole conditional statement. - unnecessary_null_comparison
+warning - screens\pet_details_screen.dart:47:41 - The operand can't be 'null', so the condition is always 'true'. Remove the condition. - unnecessary_null_comparison
+warning - screens\pet_details_screen.dart:47:64 - The '!' will have no effect because the receiver can't be null. Try removing the '!' operator. - unnecessary_non_null_assertion
+warning - screens\pet_details_screen.dart:48:53 - The '!' will have no effect because the receiver can't be null. Try removing the '!' operator. - unnecessary_non_null_assertion
+warning - screens\profile_screen.dart:5:8 - Unused import: 'package:image_cropper/image_cropper.dart'. Try removing the import directive. - unused_import
+warning - screens\profile_screen.dart:17:8 - Unused import: '../widgets/enterprise_header.dart'. Try removing the import directive. - unused_import
+warning - screens\profile_screen.dart:45:8 - The value of the field '_editingProfile' isn't used. Try removing the field, or using it. - unused_field
+warning - screens\profile_screen.dart:46:8 - The value of the field '_loadingSave' isn't used. Try removing the field, or using it. - unused_field
+warning - screens\profile_screen.dart:204:16 - The declaration '_pickImageFromGalleryForProfile' isn't referenced. Try removing the declaration of '_pickImageFromGalleryForProfile'. - unused_element
+warning - screens\profile_screen.dart:218:16 - The declaration '_saveProfile' isn't referenced. Try removing the declaration of '_saveProfile'. - unused_element
+warning - screens\profile_screen.dart:277:29 - The value of the field '_userStats' isn't used. Try removing the field, or using it. - unused_field
+warning - screens\profile_screen.dart:310:10 - The declaration '_buildPhotoOption' isn't referenced. Try removing the declaration of '_buildPhotoOption'. - unused_element
+warning - screens\profile_screen.dart:725:40 - The left operand can't be null, so the right operand is never executed. Try removing the operator and the right operand. - dead_null_aware_expression
+warning - screens\splash_screen.dart:3:8 - Unused import: '../theme/app_colors.dart'. Try removing the import directive. - unused_import
+warning - services\doctor_service.dart:6:9 - The value of the field '_client' isn't used. Try removing the field, or using it. - unused_field
+warning - services\doctor_service.dart:7:23 - The value of the field '_tableName' isn't used. Try removing the field, or using it. - unused_field
+warning - services\post_service.dart:3:8 - Unused import: 'package:supabase_flutter/supabase_flutter.dart'. Try removing the import directive. - unused_import
+   info - screens\DoctorDashboardScreen.dart:1:1 - The file name 'DoctorDashboardScreen.dart' isn't a lower_case_with_underscores identifier. Try changing the name to follow the lower_case_with_underscores style. - file_names
+   info - screens\DoctorDashboardScreen.dart:101:28 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - screens\add_pet_screen.dart:353:7 - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - screens\find_doctor_screen.dart:105:9 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - screens\forgot_password_screen.dart:30:28 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - screens\forgot_password_screen.dart:34:28 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - screens\friends_screen.dart:52:28 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - screens\onboarding_screen.dart:42:7 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - screens\profile_screen.dart:144:40 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - screens\profile_screen.dart:152:39 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - screens\profile_screen.dart:157:34 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - screens\profile_screen.dart:252:11 - Statements in an if should be enclosed in a block. Try wrapping the statement in a block. - curly_braces_in_flow_control_structures
+   info - screens\profile_screen.dart:257:36 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - screens\profile_screen.dart:373:40 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - screens\profile_screen.dart:377:37 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - screens\profile_screen.dart:404:43 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - screens\profile_screen.dart:409:34 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+
+52 issues found.

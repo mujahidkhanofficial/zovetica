@@ -78,7 +78,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           errorBuilder: (context, error, stackTrace) => Icon(
                             Icons.pets_rounded, 
                             size: 150, 
-                            color: AppColors.primary.withOpacity(0.2)
+                            color: AppColors.primary.withAlpha(51)
                           ),
                        ),
                     ),
@@ -126,7 +126,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       decoration: BoxDecoration(
                         color: _currentPage == index
                             ? AppColors.primary
-                            : AppColors.primary.withOpacity(0.2),
+                            : AppColors.primary.withAlpha(51),
                         borderRadius: BorderRadius.circular(4),
                       ),
                     ),
@@ -151,7 +151,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
                     ),
                     elevation: 4,
-                    shadowColor: AppColors.primary.withOpacity(0.4),
+                    shadowColor: AppColors.primary.withAlpha(102),
                   ),
                   child: Text(
                     _currentPage == _pages.length - 1 ? 'Get Started' : 'Next',

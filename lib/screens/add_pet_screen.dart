@@ -1,19 +1,19 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:image_cropper/image_cropper.dart';
 import 'package:zovetica/services/pet_service.dart';
 import 'package:zovetica/services/storage_service.dart';
+import '../models/app_models.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_gradients.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_shadows.dart';
-import '../widgets/enterprise_header.dart';
 import '../utils/app_notifications.dart';
 import '../utils/image_picker_helper.dart';
 
 class AddPetScreen extends StatefulWidget {
-  const AddPetScreen({super.key});
+  final Pet? petToEdit;
+  const AddPetScreen({super.key, this.petToEdit});
 
   @override
   State<AddPetScreen> createState() => _AddPetScreenState();
@@ -23,24 +23,51 @@ class _AddPetScreenState extends State<AddPetScreen> {
   final _formKey = GlobalKey<FormState>();
   final PetService _petService = PetService();
   final StorageService _storageService = StorageService();
-  final ImagePicker _picker = ImagePicker();
+
 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _breedController = TextEditingController();
   final TextEditingController _ageController = TextEditingController();
   final TextEditingController _weightController = TextEditingController();
+  final TextEditingController _heightController = TextEditingController();
   
   // Focus nodes for keyboard navigation
   final FocusNode _nameFocus = FocusNode();
   final FocusNode _breedFocus = FocusNode();
   final FocusNode _ageFocus = FocusNode();
   final FocusNode _weightFocus = FocusNode();
+  final FocusNode _heightFocus = FocusNode();
   
   String _selectedType = 'Dog';
   final List<String> _petTypes = ['Dog', 'Cat', 'Bird', 'Hamster', 'Rabbit', 'Other'];
   
+  String _selectedGender = 'Male';
+  final List<String> _genders = ['Male', 'Female', 'Unknown'];
+  
   File? _imageFile;
   bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.petToEdit != null) {
+      final pet = widget.petToEdit!;
+      _nameController.text = pet.name;
+      _breedController.text = pet.breed;
+      _ageController.text = pet.age;
+      _weightController.text = pet.weight;
+      _heightController.text = pet.height;
+      
+      if (_petTypes.contains(pet.type)) {
+        _selectedType = pet.type;
+      }
+      
+      // Default to Male if unknown
+      if (_genders.contains(pet.gender)) {
+        _selectedGender = pet.gender;
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -52,14 +79,18 @@ class _AddPetScreenState extends State<AddPetScreen> {
     _breedFocus.dispose();
     _ageFocus.dispose();
     _weightFocus.dispose();
+    _heightFocus.dispose();
+    _heightController.dispose();
     super.dispose();
   }
 
   Future<void> _pickImage(ImageSource source) async {
     final file = await ImagePickerHelper.pickAndCropImage(
+      context,
       source: source,
       title: 'Crop Pet Photo',
     );
+    if (!mounted) return;
     if (file != null) {
       setState(() => _imageFile = file);
     }
@@ -93,18 +124,37 @@ class _AddPetScreenState extends State<AddPetScreen> {
       }
 
       // 2. Add Pet to DB
-      await _petService.addPet(
-        name: _nameController.text.trim(),
-        type: _selectedType,
-        breed: _breedController.text.trim(),
-        age: _ageController.text.trim(),
-        imageUrl: imageUrl,
-        health: 'Good', // Default
-        emoji: _getEmojiForType(_selectedType),
-      );
+      // 2. Add or Update Pet
+      if (widget.petToEdit != null) {
+        await _petService.updatePet(
+          petId: widget.petToEdit!.id,
+          name: _nameController.text.trim(),
+          type: _selectedType,
+          breed: _breedController.text.trim(),
+          gender: _selectedGender,
+          age: _ageController.text.trim(),
+          weight: _weightController.text.trim(),
+          height: _heightController.text.trim(),
+          imageUrl: imageUrl, // Only updates if new image uploaded
+          emoji: _getEmojiForType(_selectedType),
+        );
+      } else {
+        await _petService.addPet(
+          name: _nameController.text.trim(),
+          type: _selectedType,
+          breed: _breedController.text.trim(),
+          gender: _selectedGender,
+          age: _ageController.text.trim(),
+          weight: _weightController.text.trim(),
+          height: _heightController.text.trim(),
+          imageUrl: imageUrl,
+          health: 'Good', // Default
+          emoji: _getEmojiForType(_selectedType),
+        );
+      }
 
       if (!mounted) return;
-      AppNotifications.showSuccess(context, 'Pet added successfully!');
+      AppNotifications.showSuccess(context, widget.petToEdit != null ? 'Pet updated successfully!' : 'Pet added successfully!');
       Navigator.pop(context, true); // Return true to trigger refresh
     } catch (e) {
       debugPrint('Error adding pet: $e');
@@ -133,19 +183,19 @@ class _AddPetScreenState extends State<AddPetScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Add New Pet',
-              style: TextStyle(
+            Text(
+              widget.petToEdit != null ? 'Edit Pet' : 'Add New Pet',
+              style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
               ),
             ),
             Text(
-              'Tell us about your furry friend',
+              widget.petToEdit != null ? 'Update details for your friend' : 'Tell us about your furry friend',
               style: TextStyle(
                 fontSize: 12,
-                color: Colors.white.withOpacity(0.9),
+                color: Colors.white.withAlpha(230),
               ),
             ),
           ],
@@ -159,9 +209,10 @@ class _AddPetScreenState extends State<AddPetScreen> {
           ),
         ),
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
           child: Form(
             key: _formKey,
             child: Column(
@@ -173,9 +224,10 @@ class _AddPetScreenState extends State<AddPetScreen> {
                 _buildSubmitButton(),
               ],
             ),
-          ),
-        ),
-      ),
+          ), // Form
+        ), // Padding
+      ), // SingleChildScrollView
+    ), // SafeArea
     );
   }
 
@@ -195,10 +247,12 @@ class _AddPetScreenState extends State<AddPetScreen> {
                 boxShadow: AppShadows.card,
                 image: _imageFile != null
                     ? DecorationImage(image: FileImage(_imageFile!), fit: BoxFit.cover)
-                    : null,
+                    : (widget.petToEdit?.imageUrl.isNotEmpty ?? false)
+                        ? DecorationImage(image: NetworkImage(widget.petToEdit!.imageUrl), fit: BoxFit.cover)
+                        : null,
               ),
               child: _imageFile == null
-                  ? Icon(Icons.pets_rounded, size: 48, color: AppColors.slate.withOpacity(0.3))
+                  ? Icon(Icons.pets_rounded, size: 48, color: AppColors.slate.withAlpha(77))
                   : null,
             ),
             Positioned(
@@ -246,6 +300,9 @@ class _AddPetScreenState extends State<AddPetScreen> {
            
            _buildDropdown(),
            const SizedBox(height: AppSpacing.lg),
+           
+           _buildGenderDropdown(),
+           const SizedBox(height: AppSpacing.lg),
 
            Row(
              children: [
@@ -272,13 +329,30 @@ class _AddPetScreenState extends State<AddPetScreen> {
            ),
            const SizedBox(height: AppSpacing.lg),
            
-           _buildTextField(
-             label: 'Weight (optional)',
-             controller: _weightController,
-             icon: Icons.monitor_weight_outlined,
-             focusNode: _weightFocus,
-             keyboardType: TextInputType.number,
-             onSubmit: _submit,
+           Row(
+             children: [
+               Expanded(
+                 child: _buildTextField(
+                   label: 'Weight',
+                   controller: _weightController,
+                   icon: Icons.monitor_weight_outlined,
+                   focusNode: _weightFocus,
+                   nextFocusNode: _heightFocus,
+                   keyboardType: TextInputType.number,
+                 ),
+               ),
+               const SizedBox(width: AppSpacing.md),
+               Expanded(
+                 child: _buildTextField(
+                   label: 'Height',
+                   controller: _heightController,
+                   icon: Icons.height_rounded,
+                   focusNode: _heightFocus,
+                   keyboardType: TextInputType.number,
+                   onSubmit: _submit,
+                 ),
+               ),
+             ],
            ),
         ],
       ),
@@ -327,7 +401,7 @@ class _AddPetScreenState extends State<AddPetScreen> {
       decoration: InputDecoration(
         labelText: label,
         labelStyle: TextStyle(color: AppColors.slate, fontWeight: FontWeight.w500),
-        hintStyle: TextStyle(color: AppColors.slate.withOpacity(0.5)),
+        hintStyle: TextStyle(color: AppColors.slate.withAlpha(128)),
         prefixIcon: Icon(icon, color: AppColors.primary),
         filled: true,
         fillColor: AppColors.cloud,
@@ -350,7 +424,7 @@ class _AddPetScreenState extends State<AddPetScreen> {
 
   Widget _buildDropdown() {
     return DropdownButtonFormField<String>(
-      value: _selectedType,
+      initialValue: _selectedType,
       items: _petTypes.map((type) => DropdownMenuItem(
         value: type,
         child: Text(
@@ -389,6 +463,47 @@ class _AddPetScreenState extends State<AddPetScreen> {
     );
   }
 
+  Widget _buildGenderDropdown() {
+    return DropdownButtonFormField<String>(
+      initialValue: _selectedGender,
+      items: _genders.map((g) => DropdownMenuItem(
+        value: g,
+        child: Text(
+          g,
+          style: const TextStyle(
+            color: AppColors.charcoal,
+            fontWeight: FontWeight.w600,
+            fontSize: 16,
+          ),
+        ),
+      )).toList(),
+      onChanged: (val) => setState(() => _selectedGender = val!),
+      dropdownColor: Colors.white,
+      icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.primary),
+      style: const TextStyle(color: AppColors.charcoal, fontSize: 16),
+      decoration: InputDecoration(
+        labelText: 'Gender',
+        labelStyle: TextStyle(color: AppColors.slate, fontWeight: FontWeight.w500),
+        prefixIcon: Icon(Icons.male_rounded, color: AppColors.primary), // Or a generic gender icon
+        filled: true,
+        fillColor: AppColors.cloud,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.borderLight),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+        ),
+        contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+      ),
+    );
+  }
+
   Widget _buildSubmitButton() {
     return SizedBox(
       width: double.infinity,
@@ -399,12 +514,12 @@ class _AddPetScreenState extends State<AddPetScreen> {
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
           elevation: 4,
-          shadowColor: AppColors.primary.withOpacity(0.4),
+          shadowColor: AppColors.primary.withAlpha(102),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
         child: _isLoading 
             ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-            : const Text('Add Pet', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            : Text(widget.petToEdit != null ? 'Update Pet' : 'Add Pet', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
       ),
     );
   }

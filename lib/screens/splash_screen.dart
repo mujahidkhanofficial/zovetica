@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
-import '../theme/app_colors.dart';
 import '../theme/app_gradients.dart';
 import '../theme/app_spacing.dart';
 import 'auth_screen.dart';
 import 'main_screen.dart';
+import 'auth_wrapper.dart';
 
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
+  final AuthService? authService;
+  const SplashScreen({super.key, this.authService});
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -15,7 +16,7 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with TickerProviderStateMixin {
-  final AuthService _authService = AuthService();
+  late final AuthService _authService;
   
   late AnimationController _logoController;
   late AnimationController _fadeController;
@@ -27,6 +28,7 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
+    _authService = widget.authService ?? AuthService();
     
     // Logo animation controller
     _logoController = AnimationController(
@@ -92,12 +94,11 @@ class _SplashScreenState extends State<SplashScreen>
     await Future.delayed(const Duration(milliseconds: 2500));
     if (!mounted) return;
 
-    final isLoggedIn = _authService.isLoggedIn;
     Navigator.pushReplacement(
       context,
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) =>
-            isLoggedIn ? const MainScreen() : const AuthScreen(),
+            const AuthWrapper(),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(opacity: animation, child: child);
         },
@@ -134,7 +135,7 @@ class _SplashScreenState extends State<SplashScreen>
                         borderRadius: BorderRadius.circular(40),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.15),
+                            color: Colors.black.withAlpha(38),
                             blurRadius: 40,
                             offset: const Offset(0, 15),
                           ),
@@ -180,7 +181,7 @@ class _SplashScreenState extends State<SplashScreen>
                             'Your Pet\'s Health Companion',
                             style: TextStyle(
                               fontSize: 16,
-                              color: Colors.white.withOpacity(0.9),
+                              color: Colors.white.withAlpha(230),
                               fontWeight: FontWeight.w400,
                               letterSpacing: 0.5,
                             ),
@@ -208,7 +209,7 @@ class _SplashScreenState extends State<SplashScreen>
                           child: CircularProgressIndicator(
                             strokeWidth: 3,
                             valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.white.withOpacity(0.8),
+                              Colors.white.withAlpha(204),
                             ),
                           ),
                         ),
@@ -217,7 +218,7 @@ class _SplashScreenState extends State<SplashScreen>
                           'Loading...',
                           style: TextStyle(
                             fontSize: 14,
-                            color: Colors.white.withOpacity(0.7),
+                            color: Colors.white.withAlpha(179),
                           ),
                         ),
                       ],
@@ -233,7 +234,7 @@ class _SplashScreenState extends State<SplashScreen>
                 'Version 1.0.0',
                 style: TextStyle(
                   fontSize: 12,
-                  color: Colors.white.withOpacity(0.5),
+                  color: Colors.white.withAlpha(128),
                 ),
               ),
               const SizedBox(height: AppSpacing.xl),

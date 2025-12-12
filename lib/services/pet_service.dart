@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'supabase_service.dart';
 import '../models/app_models.dart';
 
@@ -11,7 +12,10 @@ class PetService {
     required String name,
     required String type,
     String? breed,
+    String? gender,
     String? age,
+    String? weight, // New
+    String? height, // New
     String? health,
     String? emoji,
     String? imageUrl,
@@ -25,7 +29,10 @@ class PetService {
       'name': name,
       'type': type,
       'breed': breed,
+      'gender': gender ?? 'Unknown',
       'age': age,
+      'weight': weight,
+      'height': height,
       'health': health ?? 'Good',
       'emoji': emoji ?? '🐾',
       'image_url': imageUrl,
@@ -47,6 +54,22 @@ class PetService {
     return (response as List).map((data) => Pet.fromMap(data)).toList();
   }
 
+  /// Get a single pet by ID
+  Future<Pet?> getPetById(String petId) async {
+    try {
+      final response = await _client
+          .from(_tableName)
+          .select()
+          .eq('id', petId)
+          .single();
+      
+      return Pet.fromMap(response);
+    } catch (e) {
+      debugPrint('Error fetching pet by ID: $e');
+      return null;
+    }
+  }
+
   /// Get all pets for a specific user
   Future<List<Pet>> getPetsByUserId(String userId) async {
     final response = await _client
@@ -64,7 +87,10 @@ class PetService {
     String? name,
     String? type,
     String? breed,
+    String? gender,
     String? age,
+    String? weight, // New
+    String? height, // New
     String? health,
     String? emoji,
     String? imageUrl,
@@ -74,7 +100,10 @@ class PetService {
     if (name != null) updates['name'] = name;
     if (type != null) updates['type'] = type;
     if (breed != null) updates['breed'] = breed;
+    if (gender != null) updates['gender'] = gender;
     if (age != null) updates['age'] = age;
+    if (weight != null) updates['weight'] = weight;
+    if (height != null) updates['height'] = height;
     if (health != null) updates['health'] = health;
     if (emoji != null) updates['emoji'] = emoji;
     if (imageUrl != null) updates['image_url'] = imageUrl;
@@ -90,5 +119,34 @@ class PetService {
   /// Delete a pet
   Future<void> deletePet(String petId) async {
     await _client.from(_tableName).delete().eq('id', petId);
+  }
+
+  // --- Health Events ---
+
+  /// Get health events for a pet (petId is String UUID)
+  Future<List<PetHealthEvent>> getHealthEvents(String petId) async {
+    final response = await _client
+        .from('pet_health_events')
+        .select()
+        .eq('pet_id', petId)
+        .order('date', ascending: false);
+
+    return (response as List).map((data) => PetHealthEvent.fromMap(data)).toList();
+  }
+
+  /// Add a health event
+  Future<void> addHealthEvent(PetHealthEvent event) async {
+    await _client.from('pet_health_events').insert({
+      'pet_id': event.petId, // It's now a String (UUID)
+      'title': event.title,
+      'date': event.date.toIso8601String(),
+      'type': event.type,
+      'notes': event.notes,
+    });
+  }
+
+  /// Delete a health event
+  Future<void> deleteHealthEvent(int eventId) async {
+    await _client.from('pet_health_events').delete().eq('id', eventId);
   }
 }

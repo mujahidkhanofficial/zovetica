@@ -81,8 +81,8 @@ class _NavItem extends StatelessWidget {
           gradient: isSelected
               ? LinearGradient(
                   colors: [
-                    AppColors.primary.withOpacity(0.15),
-                    AppColors.secondary.withOpacity(0.15),
+                    AppColors.primary.withAlpha(38),
+                    AppColors.secondary.withAlpha(38),
                   ],
                 )
               : null,

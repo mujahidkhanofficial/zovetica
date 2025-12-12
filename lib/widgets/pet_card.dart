@@ -84,7 +84,7 @@ class PetWarmCard extends StatelessWidget {
       padding: padding,
       margin: margin,
       onTap: onTap,
-      color: AppColors.accentYellowLight.withOpacity(0.3),
+      color: AppColors.accentYellowLight.withAlpha(77),
       child: child,
     );
   }
@@ -123,7 +123,7 @@ class VetCard extends StatelessWidget {
             width: 60,
             height: 60,
             decoration: BoxDecoration(
-              color: AppColors.primaryLight.withOpacity(0.2),
+              color: AppColors.primaryLight.withAlpha(51),
               borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
               image: imageUrl != null
                   ? DecorationImage(
@@ -177,8 +177,8 @@ class VetCard extends StatelessWidget {
                           horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
                         color: isAvailable
-                            ? AppColors.success.withOpacity(0.1)
-                            : AppColors.textSecondary.withOpacity(0.1),
+                            ? AppColors.success.withAlpha(26)
+                            : AppColors.textSecondary.withAlpha(26),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(

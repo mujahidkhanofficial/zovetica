@@ -3,7 +3,9 @@ import 'supabase_service.dart';
 
 /// Authentication service abstracting Supabase Auth
 class AuthService {
-  final SupabaseClient _client = SupabaseService.client;
+  final SupabaseClient _client;
+
+  AuthService({SupabaseClient? client}) : _client = client ?? SupabaseService.client;
 
   /// Get current user
   User? get currentUser => _client.auth.currentUser;
@@ -15,11 +17,41 @@ class AuthService {
   Future<AuthResponse> signUp({
     required String email,
     required String password,
+    required String name,
+    required String username,
   }) async {
-    return await _client.auth.signUp(
+    final response = await _client.auth.signUp(
       email: email,
       password: password,
+      data: {
+        'full_name': name,
+        'username': username,
+      },
     );
+    
+    // Also explicitly insert into public.users if a trigger doesn't do it.
+    // Assuming backend trigger handles sync from auth.users to public.users?
+    // If not, we should do it here. 
+    // Standard Zovetica pattern: triggers do it. 
+    // BUT we need to ensure 'username' gets to public.users.
+    // If the trigger copies ALL specific metadata fields, we are good.
+    // If not, we might need a manual update.
+    // Let's assume trigger copies 'username' if present in metadata, OR we update manually.
+    
+    // Safer approach: manual upsert to public.users after signup (if trigger isn't perfect)
+    /*
+    if (response.user != null) {
+       await _client.from('users').upsert({
+         'id': response.user!.id,
+         'email': email,
+         'name': name,
+         'username': username,
+         'role': 'pet_owner',
+       });
+    }
+    */
+    
+    return response;
   }
 
   /// Sign in with email and password

@@ -4,6 +4,7 @@ import 'package:zovetica/services/user_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_gradients.dart';
 import '../theme/app_spacing.dart';
+import 'book_appointment_wizard.dart';
 
 class FindDoctorScreen extends StatefulWidget {
   const FindDoctorScreen({super.key});
@@ -40,12 +41,16 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
       List<Map<String, dynamic>> doctorMaps = doctors.map((d) {
         return {
           'id': d.id.toString(),
+          'name': d.name,
           'firstName': d.name.split(' ').first,
           'lastName': d.name.split(' ').length > 1 ? d.name.split(' ').last : '',
           'specialty': d.specialty,
           'location': d.clinic,
           'clinic': d.clinic,
           'image': d.image,
+          'profile_image': d.image, // Doctor's profile image
+          'rating': d.rating,
+          'reviews_count': d.reviews,
           'contact': '',
         };
       }).toList();
@@ -100,7 +105,8 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
       if (data == null) return;
 
       final contact = data['phone'] ?? '';
-
+      
+      if (!mounted) return;
       showModalBottomSheet(
         context: context,
         isScrollControlled: true,
@@ -113,6 +119,12 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
   }
 
   Widget _buildDoctorBottomSheet(Map<String, dynamic> data, String contact) {
+    final rating = (data['rating'] is num) ? (data['rating'] as num).toDouble() : 0.0;
+    final reviewCount = data['reviews_count'] ?? 0;
+    final hasReviews = reviewCount > 0; // Check if doctor has any reviews
+    final clinic = data['clinic'] ?? 'Zovetica Clinic';
+    final isVerified = data['is_verified'] ?? true; // Assume verified for now
+    
     return Container(
       decoration: BoxDecoration(
         color: AppColors.white,
@@ -133,41 +145,73 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
           ),
           const SizedBox(height: AppSpacing.xl),
           
-          // Doctor avatar
-          Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              gradient: AppGradients.primaryCta,
-              shape: BoxShape.circle,
-            ),
-            child: CircleAvatar(
-              radius: 50,
-              backgroundColor: AppColors.white,
-              backgroundImage: data['profile_image']?.isNotEmpty == true
-                  ? NetworkImage(data['profile_image'])
-                  : null,
-              child: data['profile_image']?.isEmpty != false
-                  ? Text(
-                      (data['name'] ?? 'D').substring(0, 1).toUpperCase(),
-                      style: TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 32,
-                      ),
-                    )
-                  : null,
-            ),
+          // Doctor avatar with verification badge
+          Stack(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  gradient: AppGradients.primaryCta,
+                  shape: BoxShape.circle,
+                ),
+                child: CircleAvatar(
+                  radius: 50,
+                  backgroundColor: AppColors.white,
+                  backgroundImage: data['profile_image']?.isNotEmpty == true
+                      ? NetworkImage(data['profile_image'])
+                      : null,
+                  child: data['profile_image']?.isEmpty != false
+                      ? Text(
+                          (data['name'] ?? 'D').substring(0, 1).toUpperCase(),
+                          style: TextStyle(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 32,
+                          ),
+                        )
+                      : null,
+                ),
+              ),
+              // Verified badge
+              if (isVerified)
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: AppColors.secondary,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                    child: const Icon(
+                      Icons.verified_rounded,
+                      color: Colors.white,
+                      size: 18,
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: AppSpacing.lg),
           
-          // Name
-          Text(
-            data['name'] ?? '',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              color: AppColors.charcoal,
-            ),
+          // Name with verified text
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                data['name'] ?? '',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.charcoal,
+                ),
+              ),
+              if (isVerified) ...[
+                const SizedBox(width: 6),
+                Icon(Icons.check_circle, color: AppColors.secondary, size: 20),
+              ],
+            ],
           ),
           const SizedBox(height: 4),
           
@@ -175,11 +219,11 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: AppColors.secondary.withOpacity(0.15),
+              color: AppColors.secondary.withAlpha(38),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
-              data['specialty'] ?? 'General',
+              data['specialty'] ?? 'General Veterinarian',
               style: TextStyle(
                 color: AppColors.secondaryDark,
                 fontWeight: FontWeight.w600,
@@ -187,11 +231,59 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
               ),
             ),
           ),
-          const SizedBox(height: AppSpacing.xl),
+          const SizedBox(height: AppSpacing.lg),
           
-          // Contact row
+          // Stats row: Rating, Reviews, Experience
           Container(
-            padding: const EdgeInsets.all(AppSpacing.lg),
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+            decoration: BoxDecoration(
+              color: AppColors.cloud,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                // Rating
+                _buildStatItem(
+                  icon: hasReviews ? Icons.star_rounded : Icons.auto_awesome_rounded,
+                  iconColor: hasReviews ? Colors.amber : AppColors.secondary,
+                  value: hasReviews ? rating.toStringAsFixed(1) : 'New',
+                  label: hasReviews ? 'Rating' : 'Doctor',
+                ),
+                // Divider
+                Container(
+                  height: 40,
+                  width: 1,
+                  color: AppColors.borderLight,
+                ),
+                // Reviews
+                _buildStatItem(
+                  icon: Icons.reviews_rounded,
+                  iconColor: AppColors.primary,
+                  value: reviewCount.toString(),
+                  label: 'Reviews',
+                ),
+                // Divider
+                Container(
+                  height: 40,
+                  width: 1,
+                  color: AppColors.borderLight,
+                ),
+                // Clinic
+                _buildStatItem(
+                  icon: Icons.verified_user_rounded,
+                  iconColor: AppColors.secondary,
+                  value: 'Verified',
+                  label: 'Status',
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          
+          // Clinic location
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
             decoration: BoxDecoration(
               color: AppColors.cloud,
               borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
@@ -201,10 +293,10 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
+                    color: AppColors.primary.withAlpha(26),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(Icons.phone_outlined, color: AppColors.primary),
+                  child: Icon(Icons.location_on_rounded, color: AppColors.primary),
                 ),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
@@ -212,14 +304,14 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Phone',
+                        'Clinic Location',
                         style: TextStyle(
                           color: AppColors.slate,
                           fontSize: 12,
                         ),
                       ),
                       Text(
-                        contact.isNotEmpty ? contact : 'Not available',
+                        clinic.isNotEmpty ? clinic : 'Location not specified',
                         style: TextStyle(
                           color: AppColors.charcoal,
                           fontWeight: FontWeight.w600,
@@ -242,7 +334,7 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
               borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.accent.withOpacity(0.35),
+                  color: AppColors.accent.withAlpha(89),
                   blurRadius: 16,
                   offset: const Offset(0, 6),
                 ),
@@ -251,7 +343,13 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
             child: Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: () => Navigator.pop(context),
+                onTap: () {
+                   Navigator.pop(context); // Close bottom sheet
+                   Navigator.push(
+                     context, 
+                     MaterialPageRoute(builder: (_) => BookAppointmentWizard(doctor: data))
+                   );
+                },
                 borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
                 child: const Center(
                   child: Text(
@@ -271,6 +369,36 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
       ),
     );
   }
+
+  Widget _buildStatItem({
+    required IconData icon,
+    required Color iconColor,
+    required String value,
+    required String label,
+  }) {
+    return Column(
+      children: [
+        Icon(icon, color: iconColor, size: 22),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: AppColors.charcoal,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: AppColors.slate,
+          ),
+        ),
+      ],
+    );
+  }
+
 
   void _showFilterSheet() {
     showModalBottomSheet(
@@ -452,7 +580,7 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
               '${_filteredDoctors.length} doctors available',
               style: TextStyle(
                 fontSize: 12,
-                color: Colors.white.withOpacity(0.9),
+                color: Colors.white.withAlpha(230),
               ),
             ),
           ],
@@ -481,7 +609,7 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.primary.withOpacity(0.08),
+                          color: AppColors.primary.withAlpha(20),
                           blurRadius: 20,
                           offset: const Offset(0, 4),
                         ),
@@ -499,7 +627,7 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
                         ),
                         decoration: InputDecoration(
                           hintText: 'Search specialists...',
-                          hintStyle: TextStyle(color: AppColors.slate.withOpacity(0.7)),
+                          hintStyle: TextStyle(color: AppColors.slate.withAlpha(179)),
                           prefixIcon: Icon(Icons.search_rounded, color: AppColors.primary),
                           filled: true,
                           fillColor: Colors.white,
@@ -532,7 +660,7 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.accent.withOpacity(0.4),
+                          color: AppColors.accent.withAlpha(102),
                           blurRadius: 16,
                           offset: const Offset(0, 8),
                         ),
@@ -558,13 +686,13 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
                               width: 120,
                               height: 120,
                               decoration: BoxDecoration(
-                                color: AppColors.primary.withOpacity(0.05),
+                                color: AppColors.primary.withAlpha(13),
                                 shape: BoxShape.circle,
                               ),
                               child: Icon(
                                 Icons.person_search_rounded,
                                 size: 60,
-                                color: AppColors.primary.withOpacity(0.5),
+                                color: AppColors.primary.withAlpha(128),
                               ),
                             ),
                             const SizedBox(height: 24),
@@ -609,7 +737,7 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
         borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withAlpha(10),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),

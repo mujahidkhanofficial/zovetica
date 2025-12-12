@@ -138,7 +138,7 @@ class _PetButtonState extends State<PetButton>
                       color: (widget.useWarmGradient
                               ? AppColors.accentPeach
                               : AppColors.primary)
-                          .withOpacity(0.3),
+                          .withAlpha(77),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),

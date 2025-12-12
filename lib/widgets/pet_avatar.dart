@@ -30,7 +30,7 @@ class PetAvatar extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: backgroundColor ?? AppColors.primaryLight.withOpacity(0.2),
+        color: backgroundColor ?? AppColors.primaryLight.withAlpha(51),
         border: showBorder
             ? Border.all(
                 color: AppColors.primary,

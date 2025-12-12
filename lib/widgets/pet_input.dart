@@ -98,7 +98,7 @@ class PetInput extends StatelessWidget {
         ),
         disabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-          borderSide: BorderSide(color: AppColors.borderLight.withOpacity(0.5)),
+          borderSide: BorderSide(color: AppColors.borderLight.withAlpha(128)),
         ),
       ),
     );
@@ -128,7 +128,7 @@ class PetSearchInput extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withAlpha(13),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),

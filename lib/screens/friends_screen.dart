@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import '../models/app_models.dart';
 import '../services/friend_service.dart';
+import '../services/chat_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_shadows.dart';
 import 'profile_screen.dart';
+import 'chat_screen.dart';
 
 class FriendsScreen extends StatefulWidget {
   const FriendsScreen({super.key});
@@ -14,6 +15,7 @@ class FriendsScreen extends StatefulWidget {
 
 class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProviderStateMixin {
   final FriendService _friendService = FriendService();
+  final ChatService _chatService = ChatService();
   late TabController _tabController;
   
   List<Map<String, dynamic>> _friends = [];
@@ -50,6 +52,22 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
     if (success) {
       _fetchData(); // Refresh both lists
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Friend request accepted!')));
+    }
+  }
+
+  Future<void> _openChat(Map<String, dynamic> user) async {
+    final chatId = await _chatService.createChat(user['id']);
+    if (mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChatScreen(
+            chatId: chatId,
+            otherUserName: user['name'] ?? 'User',
+            otherUserImage: user['profile_image'] ?? '',
+          ),
+        ),
+      );
     }
   }
 
@@ -139,7 +157,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
             CircleAvatar(
               radius: 24,
               backgroundImage: imageUrl.isNotEmpty ? NetworkImage(imageUrl) : null,
-              backgroundColor: AppColors.primary.withOpacity(0.1),
+              backgroundColor: AppColors.primary.withAlpha(26),
               child: imageUrl.isEmpty ? Text(name[0], style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)) : null,
             ),
             const SizedBox(width: 12),
@@ -168,9 +186,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
             else
                IconButton(
                  icon: const Icon(Icons.message_rounded, color: AppColors.secondary),
-                 onPressed: () {
-                   // TODO: Open Chat
-                 },
+                 onPressed: () => _openChat(user),
                ),
           ],
         ),
@@ -183,7 +199,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 64, color: AppColors.slate.withOpacity(0.3)),
+          Icon(icon, size: 64, color: AppColors.slate.withAlpha(77)),
           const SizedBox(height: 16),
           Text(message, style: TextStyle(color: AppColors.slate, fontSize: 16)),
         ],

@@ -26,7 +26,7 @@ The overall goal of Zovetica is to digitalize pet health management for both own
 • Pakistan Pet Care Market Reports (informal online sources)
 2.	Overall Description
 2.1	Product Perspective
-Zovetica is a new standalone mobile application. It integrates Firebase Authentication, Cloud Firestore, Cloud Messaging, and optional Dialogflow-based AI. It fills the gap of missing centralized pet healthcare apps in Pakistan. The system functions independently and does not depend on any previous system.
+Zovetica is a new standalone mobile application. It integrates Supabase Authentication, Database, and Realtime features. It fills the gap of missing centralized pet healthcare apps in Pakistan. The system functions independently and does not depend on any previous system.
 2.2	Product Functions
 Major functions include:
 • Doctor registration and professional profile management
@@ -53,8 +53,8 @@ These are the limits and rules the developers must follow while building the app
 The emergency guide (like first aid tips for pets) must be available even when there’s no internet. This ensures users can get help in urgent situations.
 •	Doctors must upload real credentials:
 Only verified doctors should be able to use the app to ensure reliability and safety.
-•	Only Firebase backend for Phase-1:
-Firebase is the only database/server allowed in the first version. This limits the technologies but simplifies development.
+•	Only Supabase backend for Phase-1:
+Supabase is the only database/server allowed in the first version. This limits the technologies but simplifies development.
 •	Internet required for booking, forum, AI assistant:
 Some features (like appointments, community forum, AI helper) need online connectivity.
 •	Mobile storage limited for images:

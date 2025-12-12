@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:zovetica/screens/DoctorDashboardScreen.dart';
+import 'package:zovetica/screens/doctor_dashboard_screen.dart';
 import 'package:zovetica/services/auth_service.dart';
 import 'package:zovetica/services/user_service.dart';
 import 'home_screen.dart';
@@ -15,8 +15,6 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   final AuthService _authService = AuthService();
   final UserService _userService = UserService();
-
-  bool _loading = true;
 
   @override
   void initState() {

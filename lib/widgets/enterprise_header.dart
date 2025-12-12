@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_gradients.dart';
-import '../theme/app_shadows.dart';
 
 class EnterpriseHeader extends StatelessWidget {
   final String title;
@@ -69,7 +68,7 @@ class EnterpriseHeader extends StatelessWidget {
                       subtitle!,
                       style: TextStyle(
                         fontSize: 14,
-                        color: Colors.white.withOpacity(0.9),
+                        color: Colors.white.withAlpha(230),
                         fontWeight: FontWeight.w500,
                       ),
                     ),

@@ -5,7 +5,6 @@ import '../theme/app_colors.dart';
 import '../theme/app_gradients.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_shadows.dart';
-import '../widgets/enterprise_header.dart';
 
 class DoctorsScreen extends StatefulWidget {
   const DoctorsScreen({super.key});
@@ -60,7 +59,7 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
               '${_doctors.length} specialists available',
               style: TextStyle(
                 fontSize: 12,
-                color: Colors.white.withOpacity(0.9),
+                color: Colors.white.withAlpha(230),
               ),
             ),
           ],
@@ -84,7 +83,7 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
                       Icon(
                         Icons.medical_services_outlined,
                         size: 64,
-                        color: AppColors.slate.withOpacity(0.5),
+                        color: AppColors.slate.withAlpha(128),
                       ),
                       const SizedBox(height: AppSpacing.lg),
                       Text(
@@ -236,8 +235,8 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: available
-            ? AppColors.secondary.withOpacity(0.15)
-            : AppColors.slate.withOpacity(0.1),
+            ? AppColors.secondary.withAlpha(38)
+            : AppColors.slate.withAlpha(26),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(

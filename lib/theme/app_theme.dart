@@ -51,7 +51,7 @@ class AppTheme {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
       ),
-      shadowColor: Colors.black.withOpacity(0.08),
+      shadowColor: Colors.black.withAlpha(20),
     ),
 
     // Elevated Button Theme - Coral CTA
@@ -134,7 +134,7 @@ class AppTheme {
         borderSide: BorderSide(color: AppColors.error),
       ),
       labelStyle: TextStyle(color: AppColors.slate),
-      hintStyle: TextStyle(color: AppColors.slate.withOpacity(0.6)),
+      hintStyle: TextStyle(color: AppColors.slate.withAlpha(153)),
     ),
 
     // Bottom Navigation Bar Theme
@@ -168,7 +168,7 @@ class AppTheme {
 
     // Chip Theme
     chipTheme: ChipThemeData(
-      backgroundColor: AppColors.primary.withOpacity(0.1),
+      backgroundColor: AppColors.primary.withAlpha(26),
       selectedColor: AppColors.primary,
       labelStyle: TextStyle(
         fontFamily: 'Inter',

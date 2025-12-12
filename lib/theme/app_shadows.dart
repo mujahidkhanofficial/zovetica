@@ -7,12 +7,12 @@ class AppShadows {
   /// Subtle card shadow
   static List<BoxShadow> get card => [
         BoxShadow(
-          color: Colors.black.withOpacity(0.04),
+          color: Colors.black.withAlpha(10),
           blurRadius: 8,
           offset: const Offset(0, 2),
         ),
         BoxShadow(
-          color: Colors.black.withOpacity(0.02),
+          color: Colors.black.withAlpha(5),
           blurRadius: 24,
           offset: const Offset(0, 8),
         ),
@@ -21,12 +21,12 @@ class AppShadows {
   /// Elevated shadow for modals/dialogs
   static List<BoxShadow> get elevated => [
         BoxShadow(
-          color: Colors.black.withOpacity(0.08),
+          color: Colors.black.withAlpha(20),
           blurRadius: 16,
           offset: const Offset(0, 4),
         ),
         BoxShadow(
-          color: Colors.black.withOpacity(0.04),
+          color: Colors.black.withAlpha(10),
           blurRadius: 32,
           offset: const Offset(0, 12),
         ),
@@ -35,7 +35,7 @@ class AppShadows {
   /// Bottom navigation shadow
   static List<BoxShadow> get bottomNav => [
         BoxShadow(
-          color: Colors.black.withOpacity(0.06),
+          color: Colors.black.withAlpha(15),
           blurRadius: 12,
           offset: const Offset(0, -4),
         ),
@@ -44,7 +44,7 @@ class AppShadows {
   /// Button press shadow
   static List<BoxShadow> buttonShadow(Color color) => [
         BoxShadow(
-          color: color.withOpacity(0.3),
+          color: color.withAlpha(77),
           blurRadius: 12,
           offset: const Offset(0, 4),
         ),
@@ -53,7 +53,7 @@ class AppShadows {
   /// Soft glow effect
   static List<BoxShadow> glow(Color color) => [
         BoxShadow(
-          color: color.withOpacity(0.2),
+          color: color.withAlpha(51),
           blurRadius: 20,
           spreadRadius: 2,
         ),

@@ -1,23 +1,22 @@
 import 'package:flutter/material.dart';
-import 'package:zovetica/services/auth_service.dart';
 import 'package:zovetica/services/user_service.dart';
 import 'package:zovetica/services/pet_service.dart';
-import 'package:zovetica/services/appointment_service.dart';
+import 'package:zovetica/services/notification_service.dart';
 import '../models/app_models.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_gradients.dart';
 import '../theme/app_shadows.dart';
-import 'medication_screen.dart';
 import 'emergency_screen.dart';
-import 'auth_screen.dart';
 import 'find_doctor_screen.dart';
 import 'appointment_screen.dart';
 import 'community_screen.dart';
-import 'chat_screen.dart';
 import 'profile_screen.dart';
 import 'pet_details_screen.dart';
 import 'add_pet_screen.dart';
+import 'simple_chat_list_screen.dart';
+import 'notification_screen.dart';
+import 'ai_chat_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -27,14 +26,12 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final AuthService _authService = AuthService();
   final UserService _userService = UserService();
   final PetService _petService = PetService();
-  final AppointmentService _appointmentService = AppointmentService();
+  final NotificationService _notificationService = NotificationService();
 
   String _username = "";
   List<Pet> _pets = [];
-  List<Appointment> _upcomingAppointments = [];
 
   // Mock Daily Tasks for Dashboard
   final List<Map<String, dynamic>> _dailyTasks = [
@@ -51,12 +48,11 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _fetchUser();
     _fetchPets();
-    _fetchAppointments();
     _screens.addAll([
       const SizedBox(), // Placeholder for Home
       const FindDoctorScreen(),
       const AppointmentScreen(),
-      const CommunityScreen(),
+      const SimpleChatListScreen(),
       const ProfileScreen(),
     ]);
   }
@@ -82,17 +78,6 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     } catch (e) {
       debugPrint('Error fetching pets: $e');
-    }
-  }
-
-  Future<void> _fetchAppointments() async {
-    try {
-      final appointments = await _appointmentService.getUserAppointments();
-      setState(() {
-        _upcomingAppointments = appointments;
-      });
-    } catch (e) {
-      debugPrint('Error fetching appointments: $e');
     }
   }
 
@@ -125,7 +110,15 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       key: const ValueKey<int>(0),
       color: AppColors.cloud,
+      child: RefreshIndicator(
+      onRefresh: () async {
+        await Future.wait([
+          _fetchUser(),
+          _fetchPets(),
+        ]);
+      },
       child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
         child: Column(
           children: [
             // Immersive Header with gradient
@@ -151,7 +144,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               Text(
                                 _getGreeting(),
                                 style: TextStyle(
-                                  color: Colors.white.withOpacity(0.85),
+                                  color: Colors.white.withAlpha(217),
                                   fontSize: 16,
                                   fontWeight: FontWeight.w500,
                                 ),
@@ -168,15 +161,55 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             ],
                           ),
-                          Container(
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              shape: BoxShape.circle,
-                            ),
-                            child: IconButton(
-                              icon: const Icon(Icons.notifications_none_rounded, color: Colors.white, size: 26),
-                              onPressed: () {},
-                            ),
+                          // Notification Icon with Badge
+                          StreamBuilder<int>(
+                            stream: _notificationService.getUnreadCountStream(),
+                            builder: (context, snapshot) {
+                              final count = snapshot.data ?? 0;
+                              return Stack(
+                                children: [
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withAlpha(51),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: IconButton(
+                                      icon: const Icon(Icons.notifications_none_rounded, color: Colors.white, size: 26),
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(builder: (_) => const NotificationScreen()),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                  if (count > 0)
+                                    Positioned(
+                                      right: 6,
+                                      top: 6,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(4),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.accent,
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: Colors.white, width: 1.5),
+                                        ),
+                                        constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                                        child: Center(
+                                          child: Text(
+                                            count > 9 ? '9+' : count.toString(),
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              );
+                            },
                           ),
                         ],
                       ),
@@ -199,14 +232,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   _buildQuickActionsGrid(),
                   const SizedBox(height: AppSpacing.xl),
 
-                  // Health Vitals
-                  if (_pets.isNotEmpty) ...[
-                    _buildSectionHeader("Health Vitals", Icons.favorite_rounded),
-                    const SizedBox(height: AppSpacing.md),
-                    _buildHealthVitals(_pets.first),
-                    const SizedBox(height: AppSpacing.xl),
-                  ],
-
                   // Daily Care Timeline
                   _buildSectionHeader("Daily Care", Icons.schedule_rounded, action: "See all"),
                   const SizedBox(height: AppSpacing.md),
@@ -219,9 +244,9 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
-    );
-  }
-
+    ),
+  );
+}
   String _getGreeting() {
     final hour = DateTime.now().hour;
     if (hour < 12) return 'Good Morning,';
@@ -238,7 +263,7 @@ class _HomeScreenState extends State<HomeScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
+                color: AppColors.primary.withAlpha(26),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(icon, color: AppColors.primary, size: 20),
@@ -267,18 +292,16 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- Widgets ---
-
   Widget _buildPetSpotlight(Pet pet) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15),
+        color: Colors.white.withAlpha(38),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.2)),
+        border: Border.all(color: Colors.white.withAlpha(51)),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primaryDark.withOpacity(0.2),
+            color: AppColors.primaryDark.withAlpha(51),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -293,9 +316,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppColors.success.withOpacity(0.2),
+                    color: AppColors.success.withAlpha(51),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppColors.success.withOpacity(0.5)),
+                    border: Border.all(color: AppColors.success.withAlpha(128)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -314,7 +337,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 8),
                 Text(
                   "Next checkup in 14 days",
-                  style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 13),
+                  style: TextStyle(color: Colors.white.withAlpha(204), fontSize: 13),
                 ),
               ],
             ),
@@ -331,12 +354,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white, width: 3),
-                  image: pet.imageUrl != null 
-                    ? DecorationImage(image: NetworkImage(pet.imageUrl!), fit: BoxFit.cover)
+                  image: pet.imageUrl.isNotEmpty 
+                    ? DecorationImage(image: NetworkImage(pet.imageUrl), fit: BoxFit.cover)
                     : null,
-                  color: Colors.white.withOpacity(0.2),
+                  color: Colors.white.withAlpha(51),
                 ),
-                child: pet.imageUrl == null 
+                child: pet.imageUrl.isEmpty 
                   ? Center(child: Text(pet.emoji, style: const TextStyle(fontSize: 32))) 
                   : null,
               ),
@@ -351,7 +374,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15),
+        color: Colors.white.withAlpha(38),
         borderRadius: BorderRadius.circular(24),
       ),
       child: Center(
@@ -392,13 +415,13 @@ class _HomeScreenState extends State<HomeScreen> {
             "Ask AI",
             Icons.auto_awesome_rounded,
             AppGradients.primaryDiagonal, // Minty feel
-            () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ChatScreen())),
+            () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AiChatScreen())),
           ),
           _buildActionCard(
             "Community",
             Icons.people_alt_rounded,
             AppGradients.warmHeader,
-            () => setState(() => _selectedIndex = 3),
+            () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CommunityScreen())),
           ),
         ],
       );
@@ -414,7 +437,7 @@ class _HomeScreenState extends State<HomeScreen> {
           gradient: gradient,
           boxShadow: [
             BoxShadow(
-              color: gradient.colors.first.withOpacity(0.3),
+              color: gradient.colors.first.withAlpha(77),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -425,7 +448,7 @@ class _HomeScreenState extends State<HomeScreen> {
             Positioned(
               right: -10,
               bottom: -10,
-              child: Icon(icon, size: 80, color: Colors.white.withOpacity(0.2)),
+              child: Icon(icon, size: 80, color: Colors.white.withAlpha(51)),
             ),
             Padding(
               padding: const EdgeInsets.all(16.0),
@@ -450,50 +473,6 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-
-  Widget _buildHealthVitals(Pet pet) {
-    return Row(
-      children: [
-        Expanded(child: _buildVitalCard("Weight", "12.5 kg", Icons.monitor_weight_rounded, true)),
-        const SizedBox(width: 16),
-        Expanded(child: _buildVitalCard("Activity", "2.5 km", Icons.directions_walk_rounded, false)),
-      ],
-    );
-  }
-
-  Widget _buildVitalCard(String title, String value, IconData icon, bool increase) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        boxShadow: AppShadows.card,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Icon(icon, size: 20, color: AppColors.slate),
-              Icon(
-                increase ? Icons.arrow_upward_rounded : Icons.arrow_forward_rounded,
-                size: 16,
-                color: increase ? AppColors.success : AppColors.slate,
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            value,
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.charcoal),
-          ),
-          Text(title, style: TextStyle(fontSize: 12, color: AppColors.slate)),
-        ],
-      ),
-    );
-  }
-
   Widget _buildTaskItem(Map<String, dynamic> task) {
     bool completed = task['completed'];
     return Container(
@@ -507,7 +486,7 @@ class _HomeScreenState extends State<HomeScreen> {
         leading: Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: completed ? AppColors.success.withOpacity(0.1) : AppColors.primary.withOpacity(0.1),
+            color: completed ? AppColors.success.withAlpha(26) : AppColors.primary.withAlpha(26),
             shape: BoxShape.circle,
           ),
           child: Icon(
@@ -548,7 +527,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withAlpha(13),
             blurRadius: 10,
             offset: const Offset(0, -2),
           ),
@@ -581,7 +560,7 @@ class _HomeScreenState extends State<HomeScreen> {
               _buildNavItem(Icons.home_rounded, Icons.home_outlined, 'Home'),
               _buildNavItem(Icons.search_rounded, Icons.search_outlined, 'Find Vet'),
               _buildNavItem(Icons.calendar_month_rounded, Icons.calendar_today_outlined, 'Bookings'),
-              _buildNavItem(Icons.people_rounded, Icons.people_outline, 'Community'),
+              _buildNavItem(Icons.chat_bubble_rounded, Icons.chat_bubble_outline, 'Messages'),
               _buildNavItem(Icons.person_rounded, Icons.person_outline, 'Profile'),
             ],
           ),
@@ -600,7 +579,7 @@ class _HomeScreenState extends State<HomeScreen> {
         padding: const EdgeInsets.only(bottom: 4.0),
         child: Container(
           decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.1),
+            color: AppColors.primary.withAlpha(26),
             borderRadius: BorderRadius.circular(12),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
