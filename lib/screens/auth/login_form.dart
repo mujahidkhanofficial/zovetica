@@ -1,10 +1,11 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:zovetica/screens/doctor_dashboard_screen.dart';
+import 'package:zovetica/screens/vet_main_screen.dart';
 import 'package:zovetica/screens/home_screen.dart';
 import 'package:zovetica/services/auth_service.dart';
 import 'package:zovetica/services/user_service.dart';
+import '../../core/network/connectivity_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_gradients.dart';
 import '../../theme/app_spacing.dart';
@@ -103,6 +104,14 @@ class _LoginFormState extends State<LoginForm> {
     // Clear previous error
     setState(() => _errorMessage = null);
 
+    // Check connectivity
+    final status = await ConnectivityService.instance.checkConnectivity();
+    if (status == NetworkStatus.offline) {
+      if (!mounted) return;
+      setState(() => _errorMessage = 'No internet connection. Please turn on data or wifi.');
+      return;
+    }
+
     if (email.isEmpty || password.isEmpty) {
       setState(() => _errorMessage = 'Please enter both email and password');
       return;
@@ -133,7 +142,7 @@ class _LoginFormState extends State<LoginForm> {
       if (role == "doctor") {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const DoctorDashboardScreen()),
+          MaterialPageRoute(builder: (_) => const VetMainScreen()),
         );
       } else {
         Navigator.pushReplacement(

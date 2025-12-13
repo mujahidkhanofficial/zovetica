@@ -84,3 +84,17 @@ class PetHealthEvent {
     );
   }
 }
+
+class AvailabilitySlot {
+  final String id;
+  final String day;
+  final String startTime;
+  final String endTime;
+
+  AvailabilitySlot({
+    required this.id,
+    required this.day,
+    required this.startTime,
+    required this.endTime,
+  });
+}

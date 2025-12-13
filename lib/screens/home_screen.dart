@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:zovetica/services/user_service.dart';
+import 'package:zovetica/services/auth_service.dart';
+import '../data/repositories/user_repository.dart';
+import '../widgets/widgets.dart';
 import 'package:zovetica/services/pet_service.dart';
 import 'package:zovetica/services/notification_service.dart';
 import '../models/app_models.dart';
@@ -7,6 +10,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_gradients.dart';
 import '../theme/app_shadows.dart';
+import '../widgets/offline_banner.dart';
 import 'emergency_screen.dart';
 import 'find_doctor_screen.dart';
 import 'appointment_screen.dart';
@@ -17,7 +21,10 @@ import 'add_pet_screen.dart';
 import 'simple_chat_list_screen.dart';
 import 'notification_screen.dart';
 import 'ai_chat_screen.dart';
-
+import '../data/repositories/pet_repository.dart';
+import 'package:drift/drift.dart' hide Column;
+import '../data/local/database.dart';
+import '../utils/app_notifications.dart';
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -27,8 +34,11 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final UserService _userService = UserService();
+  final AuthService _authService = AuthService();
   final PetService _petService = PetService();
   final NotificationService _notificationService = NotificationService();
+  final PetRepository _petRepo = PetRepository.instance;
+  final UserRepository _userRepo = UserRepository.instance;
 
   String _username = "";
   List<Pet> _pets = [];
@@ -59,11 +69,25 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _fetchUser() async {
     try {
-      final userData = await _userService.getCurrentUser();
-      if (userData != null) {
-        setState(() {
-          _username = userData['name'] ?? "";
-        });
+      final userId = _authService.currentUser?.id;
+      if (userId != null) {
+        // Try local repo first for offline support
+        final localUser = await _userRepo.getUser(userId);
+        if (localUser != null) {
+          if (mounted) {
+            setState(() {
+              _username = localUser.name ?? "Pet Parent";
+            });
+          }
+        }
+        
+        // Sync API
+        final userData = await _userService.getCurrentUser();
+        if (userData != null && mounted) {
+          setState(() {
+            _username = userData['name'] ?? _username;
+          });
+        }
       }
     } catch (e) {
       debugPrint("Error fetching user: $e");
@@ -72,10 +96,19 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _fetchPets() async {
     try {
-      final pets = await _petService.getPets();
-      setState(() {
-        _pets = pets;
-      });
+      // Local-first: load from cache first
+      final localPets = await _petRepo.getMyPets();
+      if (localPets.isNotEmpty) {
+        setState(() {
+          _pets = localPets.map(_petRepo.localPetToPet).toList();
+        });
+      } else {
+        // Fallback to service if no cache
+        final pets = await _petService.getPets();
+        setState(() {
+          _pets = pets;
+        });
+      }
     } catch (e) {
       debugPrint('Error fetching pets: $e');
     }
@@ -110,14 +143,14 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       key: const ValueKey<int>(0),
       color: AppColors.cloud,
-      child: RefreshIndicator(
-      onRefresh: () async {
-        await Future.wait([
-          _fetchUser(),
-          _fetchPets(),
-        ]);
-      },
-      child: SingleChildScrollView(
+      child: AppRefreshIndicator(
+        onRefresh: () async {
+          await Future.wait([
+            _fetchUser(),
+            _fetchPets(),
+          ]);
+        },
+        child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         child: Column(
           children: [
@@ -233,9 +266,21 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: AppSpacing.xl),
 
                   // Daily Care Timeline
-                  _buildSectionHeader("Daily Care", Icons.schedule_rounded, action: "See all"),
+                  _buildSectionHeader(
+                    "Daily Care", 
+                    Icons.schedule_rounded, 
+                    action: "See all",
+                    onAction: () {
+                      if (_pets.isNotEmpty) {
+                        Navigator.push(
+                          context, 
+                          MaterialPageRoute(builder: (_) => PetDetailsScreen(pet: _pets.first))
+                        );
+                      }
+                    }
+                  ),
                   const SizedBox(height: AppSpacing.md),
-                  ..._dailyTasks.map((task) => _buildTaskItem(task)),
+                  _buildDailyCareFeed(),
 
                   const SizedBox(height: 100),
                 ],
@@ -254,7 +299,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return 'Good Evening,';
   }
 
-  Widget _buildSectionHeader(String title, IconData icon, {String? action}) {
+  Widget _buildSectionHeader(String title, IconData icon, {String? action, VoidCallback? onAction}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -277,7 +322,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         if (action != null)
           TextButton(
-            onPressed: () {},
+            onPressed: onAction ?? () {},
             style: TextButton.styleFrom(
               padding: EdgeInsets.zero,
               minimumSize: Size.zero,
@@ -354,14 +399,18 @@ class _HomeScreenState extends State<HomeScreen> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white, width: 3),
-                  image: pet.imageUrl.isNotEmpty 
-                    ? DecorationImage(image: NetworkImage(pet.imageUrl), fit: BoxFit.cover)
-                    : null,
                   color: Colors.white.withAlpha(51),
                 ),
-                child: pet.imageUrl.isEmpty 
-                  ? Center(child: Text(pet.emoji, style: const TextStyle(fontSize: 32))) 
-                  : null,
+                child: ClipOval(
+                  child: pet.imageUrl.isNotEmpty
+                      ? CachedImage(
+                          imageUrl: pet.imageUrl,
+                          width: 80,
+                          height: 80,
+                          fit: BoxFit.cover,
+                        )
+                      : Center(child: Text(pet.emoji, style: const TextStyle(fontSize: 32))),
+                ),
               ),
             ),
           ),
@@ -473,45 +522,124 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-  Widget _buildTaskItem(Map<String, dynamic> task) {
-    bool completed = task['completed'];
+  Widget _buildDailyCareFeed() {
+    if (_pets.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+           color: Colors.white,
+           borderRadius: BorderRadius.circular(16),
+           border: Border.all(color: AppColors.borderLight),
+        ),
+        child: const Center(
+          child: Text("Add a pet to track daily care tasks", style: TextStyle(color: AppColors.slate)),
+        ),
+      );
+    }
+
+    // Showing tasks for the first pet (Spotlight Pet)
+    final spotlightPet = _pets.first;
+
+    return StreamBuilder<List<LocalCareTask>>(
+      stream: AppDatabase.instance.watchCareTasks(spotlightPet.id),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+           return const Center(child: CircularProgressIndicator());
+        }
+        
+        final tasks = snapshot.data!;
+
+        if (tasks.isEmpty) {
+           return Container(
+            padding: const EdgeInsets.all(24),
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.borderLight),
+            ),
+            child: Column(
+              children: [
+                Icon(Icons.task_alt_rounded, size: 40, color: AppColors.slate.withAlpha(77)),
+                const SizedBox(height: 8),
+                Text('No tasks for ${spotlightPet.name} today', style: TextStyle(color: AppColors.slate)),
+                TextButton(
+                  onPressed: () {
+                     Navigator.push(context, MaterialPageRoute(builder: (_) => PetDetailsScreen(pet: spotlightPet)));
+                  },
+                  child: const Text('Add Tasks'),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Column(
+          children: tasks.map((task) => _buildLocalTaskItem(task)).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildLocalTaskItem(LocalCareTask task) {
+    final now = DateTime.now();
+    final isCompletedToday = task.lastCompletedAt != null && 
+        task.lastCompletedAt!.year == now.year &&
+        task.lastCompletedAt!.month == now.month &&
+        task.lastCompletedAt!.day == now.day;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: AppShadows.card,
+        border: isCompletedToday ? Border.all(color: AppColors.success.withAlpha(50)) : null,
       ),
       child: ListTile(
         leading: Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: completed ? AppColors.success.withAlpha(26) : AppColors.primary.withAlpha(26),
+            color: isCompletedToday ? AppColors.success.withAlpha(26) : AppColors.primary.withAlpha(26),
             shape: BoxShape.circle,
           ),
           child: Icon(
-            task['type'] == 'medication' ? Icons.medication_rounded : Icons.pets_rounded,
-            color: completed ? AppColors.success : AppColors.primary,
+            Icons.pets_rounded,
+            color: isCompletedToday ? AppColors.success : AppColors.primary,
             size: 20,
           ),
         ),
         title: Text(
-          task['title'],
+          task.title,
           style: TextStyle(
             fontWeight: FontWeight.w600,
-            color: completed ? AppColors.slate : AppColors.charcoal,
-            decoration: completed ? TextDecoration.lineThrough : null,
+            color: isCompletedToday ? AppColors.slate : AppColors.charcoal,
+            decoration: isCompletedToday ? TextDecoration.lineThrough : null,
           ),
         ),
-        subtitle: Text(task['time'], style: TextStyle(fontSize: 12, color: AppColors.slate)),
+        subtitle: Text(task.frequency, style: TextStyle(fontSize: 12, color: AppColors.slate)),
         trailing: Checkbox(
-          value: completed,
+          value: isCompletedToday,
           activeColor: AppColors.success,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-          onChanged: (val) {
-            setState(() {
-              task['completed'] = val;
-            });
+          onChanged: (val) async {
+             await AppDatabase.instance.toggleCareTask(
+               task.id, 
+               (val == true) ? DateTime.now() : null
+             );
+             
+             if (val == true && mounted) {
+                 ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                 ScaffoldMessenger.of(context).showSnackBar(
+                   SnackBar(
+                     content: Text('${task.title} completed!'),
+                     backgroundColor: AppColors.success,
+                     duration: const Duration(milliseconds: 1500),
+                     behavior: SnackBarBehavior.floating,
+                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                   ),
+                 );
+             }
           },
         ),
       ),

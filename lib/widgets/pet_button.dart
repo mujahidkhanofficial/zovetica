@@ -14,6 +14,9 @@ class PetButton extends StatefulWidget {
   final IconData? icon;
   final double? width;
   final double height;
+  final Color? textColor;
+  final Color? backgroundColor;
+  final Color? borderColor;
 
   const PetButton({
     super.key,
@@ -25,6 +28,9 @@ class PetButton extends StatefulWidget {
     this.icon,
     this.width,
     this.height = 56,
+    this.textColor,
+    this.backgroundColor,
+    this.borderColor,
   });
 
   @override
@@ -72,6 +78,11 @@ class _PetButtonState extends State<PetButton>
   Widget build(BuildContext context) {
     final gradient =
         widget.useWarmGradient ? AppGradients.warmHeader : AppGradients.primaryCta;
+        
+    final effectiveTextColor = widget.textColor ?? 
+        (widget.isOutlined ? AppColors.primary : Colors.white);
+        
+    final effectiveBorderColor = widget.borderColor ?? AppColors.primary;
 
     if (widget.isOutlined) {
       return SizedBox(
@@ -80,30 +91,30 @@ class _PetButtonState extends State<PetButton>
         child: OutlinedButton(
           onPressed: widget.isLoading ? null : widget.onPressed,
           style: OutlinedButton.styleFrom(
-            side: BorderSide(color: AppColors.primary, width: 2),
+            side: BorderSide(color: effectiveBorderColor, width: 2),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
             ),
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
           ),
           child: widget.isLoading
-              ? const SizedBox(
+              ? SizedBox(
                   width: 24,
                   height: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: CircularProgressIndicator(strokeWidth: 2, color: effectiveTextColor),
                 )
               : Row(
                   mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     if (widget.icon != null) ...[
-                      Icon(widget.icon, size: 20),
+                      Icon(widget.icon, size: 20, color: effectiveTextColor),
                       const SizedBox(width: AppSpacing.sm),
                     ],
                     Text(
                       widget.text,
                       style: AppTextStyles.button.copyWith(
-                        color: AppColors.primary,
+                        color: effectiveTextColor,
                       ),
                     ),
                   ],
@@ -129,10 +140,10 @@ class _PetButtonState extends State<PetButton>
           width: widget.width,
           height: widget.height,
           decoration: BoxDecoration(
-            gradient: widget.onPressed != null ? gradient : null,
-            color: widget.onPressed == null ? AppColors.borderLight : null,
+            gradient: widget.backgroundColor == null && widget.onPressed != null ? gradient : null,
+            color: widget.backgroundColor ?? (widget.onPressed == null ? AppColors.borderLight : null),
             borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-            boxShadow: widget.onPressed != null
+            boxShadow: widget.onPressed != null && widget.backgroundColor == null
                 ? [
                     BoxShadow(
                       color: (widget.useWarmGradient
@@ -159,13 +170,13 @@ class _PetButtonState extends State<PetButton>
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (widget.icon != null) ...[
-                        Icon(widget.icon, color: Colors.white, size: 20),
+                        Icon(widget.icon, color: effectiveTextColor, size: 20),
                         const SizedBox(width: AppSpacing.sm),
                       ],
                       Text(
                         widget.text,
                         style: AppTextStyles.button.copyWith(
-                          color: Colors.white,
+                          color: effectiveTextColor,
                         ),
                       ),
                     ],

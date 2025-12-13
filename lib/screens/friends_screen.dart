@@ -5,6 +5,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_shadows.dart';
 import 'profile_screen.dart';
 import 'chat_screen.dart';
+import '../widgets/widgets.dart';
 
 class FriendsScreen extends StatefulWidget {
   const FriendsScreen({super.key});
@@ -154,11 +155,11 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
         ),
         child: Row(
           children: [
-            CircleAvatar(
+            CachedAvatar(
+              imageUrl: imageUrl,
+              name: name,
               radius: 24,
-              backgroundImage: imageUrl.isNotEmpty ? NetworkImage(imageUrl) : null,
               backgroundColor: AppColors.primary.withAlpha(26),
-              child: imageUrl.isEmpty ? Text(name[0], style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)) : null,
             ),
             const SizedBox(width: 12),
             Expanded(

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:zovetica/screens/doctor_dashboard_screen.dart';
+import 'package:zovetica/screens/vet_main_screen.dart';
 import 'package:zovetica/services/auth_service.dart';
 import 'package:zovetica/services/user_service.dart';
 import 'home_screen.dart';
@@ -51,7 +51,7 @@ class _MainScreenState extends State<MainScreen> {
 
       if (role == "doctor") {
         Navigator.pushReplacement(context,
-            MaterialPageRoute(builder: (_) => const DoctorDashboardScreen()));
+            MaterialPageRoute(builder: (_) => const VetMainScreen()));
       } else {
         Navigator.pushReplacement(
             context, MaterialPageRoute(builder: (_) => const HomeScreen()));

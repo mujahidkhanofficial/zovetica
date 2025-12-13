@@ -4,7 +4,7 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: '>=2.19.0 <4.0.0'
+  sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
   flutter:
@@ -28,12 +28,23 @@ dependencies:
   intl: ^0.19.0
   http: ^1.2.0
 
+  # Offline-First Architecture
+  drift: 2.14.1                   # Local SQL database (pinned to avoid records issue)
+  sqlite3_flutter_libs: ^0.5.18   # SQLite bindings
+  path_provider: ^2.1.1           # App documents directory
+  path: ^1.8.3                    # Path utilities
+  connectivity_plus: ^5.0.2       # Network state detection
+  cached_network_image: ^3.3.1    # Offline image caching
+  flutter_local_notifications: ^19.5.0
+  # workmanager: ^0.5.2             # Background sync tasks (disabled - Android compatibility issue)
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
   mockito: ^5.4.4
   build_runner: ^2.4.9
+  drift_dev: 2.14.1               # Drift code generation (pinned)
 
   supabase: any
 flutter:

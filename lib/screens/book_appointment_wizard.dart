@@ -156,12 +156,20 @@ class _BookAppointmentWizardState extends State<BookAppointmentWizard>
           .map((p) => p.name)
           .join(', ');
 
-      await _notificationService.createNotification(
-        userId: widget.doctor['id'],
-        type: 'appointment_request',
-        title: 'New Appointment Request',
-        body: 'You have a ${_selectedType.name} appointment for $petCount pet(s) ($petNames) on $dateStr at $_selectedTime',
-      );
+      // Send notification to doctor (optional - don't fail booking if this errors)
+      try {
+        // Use doctor's user_id for notification, fallback to id
+        final doctorUserId = widget.doctor['user_id'] ?? widget.doctor['id'];
+        await _notificationService.createNotification(
+          userId: doctorUserId,
+          type: 'message', // Using 'message' type as DB constraint doesn't allow 'appointment'
+          title: 'New Appointment Request',
+          body: 'You have a ${_selectedType.name} appointment for $petCount pet(s) ($petNames) on $dateStr at $_selectedTime',
+        );
+      } catch (notifError) {
+        // Notification failed but booking succeeded - don't block the flow
+        debugPrint('⚠️ Notification failed: $notifError');
+      }
 
       if (mounted) {
         setState(() => _isLoading = false);

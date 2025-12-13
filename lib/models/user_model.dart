@@ -38,4 +38,30 @@ class User {
       username: map['username'],
     );
   }
+
+  User copyWith({
+    String? id,
+    String? name,
+    String? email,
+    String? phone,
+    UserRole? role, // Fix parameter type
+    String? specialty,
+    String? clinic,
+    String? bio,
+    String? profileImage,
+    String? username,
+  }) {
+    return User(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      email: email ?? this.email,
+      phone: phone ?? this.phone,
+      role: role ?? this.role,
+      specialty: specialty ?? this.specialty,
+      clinic: clinic ?? this.clinic,
+      bio: bio ?? this.bio,
+      profileImage: profileImage ?? this.profileImage,
+      username: username ?? this.username,
+    );
+  }
 }

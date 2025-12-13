@@ -137,12 +137,22 @@ class PetService {
   /// Add a health event
   Future<void> addHealthEvent(PetHealthEvent event) async {
     await _client.from('pet_health_events').insert({
-      'pet_id': event.petId, // It's now a String (UUID)
+      'pet_id': event.petId,
       'title': event.title,
       'date': event.date.toIso8601String(),
       'type': event.type,
       'notes': event.notes,
     });
+  }
+
+  /// Update a health event
+  Future<void> updateHealthEvent(PetHealthEvent event) async {
+    await _client.from('pet_health_events').update({
+      'title': event.title,
+      'date': event.date.toIso8601String(),
+      'type': event.type,
+      'notes': event.notes,
+    }).eq('id', event.id);
   }
 
   /// Delete a health event

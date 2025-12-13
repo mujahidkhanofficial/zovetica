@@ -1,3 +1,6 @@
+import 'package:flutter/material.dart';
+import '../models/app_models.dart';
+
 class ViewPetsScreen extends StatelessWidget {
   final List<Pet> pets;
 

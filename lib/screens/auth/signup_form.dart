@@ -7,6 +7,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_gradients.dart';
 import '../../theme/app_spacing.dart';
 import '../../models/app_models.dart';
+import '../../core/network/connectivity_service.dart';
 
 class SignUpForm extends StatefulWidget {
   final VoidCallback onSwitchToLogin;
@@ -148,6 +149,14 @@ class _SignUpFormState extends State<SignUpForm> {
 
     // Clear previous error
     setState(() => _errorMessage = null);
+
+    // Check connectivity
+    final status = await ConnectivityService.instance.checkConnectivity();
+    if (status == NetworkStatus.offline) {
+      if (!mounted) return;
+      setState(() => _errorMessage = 'No internet connection. Please turn on data or wifi.');
+      return;
+    }
 
     if (firstName.isEmpty ||
         lastName.isEmpty ||

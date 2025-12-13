@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:drift/drift.dart' hide Column;
+import '../data/local/database.dart';
+import '../widgets/pet_button.dart';
+import '../widgets/pet_input.dart';
+import '../widgets/confirmation_dialog.dart';
 import '../models/app_models.dart';
+import '../widgets/widgets.dart';
 import '../services/pet_service.dart';
+import '../data/repositories/pet_repository.dart';
 import '../services/supabase_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_gradients.dart';
@@ -68,7 +75,7 @@ class _PetDetailsScreenState extends State<PetDetailsScreen> {
 
     if (confirmed == true) {
       try {
-        await _petService.deletePet(_pet.id);
+        await PetRepository.instance.deletePet(_pet.id);
         if (!mounted) return;
         AppNotifications.showSuccess(context, '${_pet.name} has been deleted');
         Navigator.pop(context, true); // Return to list
@@ -115,7 +122,7 @@ class _PetDetailsScreenState extends State<PetDetailsScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.cloud,
-      body: RefreshIndicator(
+      body: AppRefreshIndicator(
         onRefresh: _fetchHealthEvents,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -147,7 +154,10 @@ class _PetDetailsScreenState extends State<PetDetailsScreen> {
                   Hero(
                     tag: _pet.name,
                     child: _pet.imageUrl.isNotEmpty
-                        ? Image.network(_pet.imageUrl, fit: BoxFit.cover)
+                        ? CachedImage(
+                            imageUrl: _pet.imageUrl,
+                            fit: BoxFit.cover,
+                          )
                         : Container(
                             decoration: const BoxDecoration(
                               gradient: AppGradients.primaryDiagonal,
@@ -219,7 +229,12 @@ class _PetDetailsScreenState extends State<PetDetailsScreen> {
                   _buildStatsGrid(),
                   const SizedBox(height: AppSpacing.xl),
                   
-                  // Timeline Header with Add Button
+                  // DAILY CARE SECTION
+                  _buildCareTasksSection(),
+                  
+                  const SizedBox(height: 32),
+
+                  // HEALTH TIMELINE SECTION
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -233,7 +248,7 @@ class _PetDetailsScreenState extends State<PetDetailsScreen> {
                       ),
                       if (isOwner)
                         IconButton(
-                          onPressed: _showAddEventDialog,
+                          onPressed: () => _showHealthEventDialog(),
                           icon: Container(
                             padding: const EdgeInsets.all(4),
                             decoration: BoxDecoration(
@@ -247,14 +262,26 @@ class _PetDetailsScreenState extends State<PetDetailsScreen> {
                   ),
                   const SizedBox(height: AppSpacing.md),
                   
-                  if (_loadingEvents)
-                    const Center(child: CircularProgressIndicator())
-                  else if (_healthEvents.isEmpty)
-                    _buildEmptyTimeline()
-                  else
-                    ..._healthEvents.map((event) => _buildTimelineItem(event)),
+                  StreamBuilder<List<LocalHealthEvent>>(
+                    stream: AppDatabase.instance.watchHealthEvents(_pet.id),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      
+                      final events = snapshot.data!;
+                      
+                      if (events.isEmpty) {
+                        return _buildEmptyTimeline();
+                      }
+                      
+                      return Column(
+                        children: events.map((event) => _buildTimelineItem(event)).toList(),
+                      );
+                    },
+                  ),
                     
-                  const SizedBox(height: 80),
+                  const SizedBox(height: 100),
                 ]),
               ),
             ),
@@ -334,7 +361,7 @@ class _PetDetailsScreenState extends State<PetDetailsScreen> {
     );
   }
 
-  Widget _buildTimelineItem(PetHealthEvent event) {
+  Widget _buildTimelineItem(LocalHealthEvent event) {
     return IntrinsicHeight(
       child: Row(
         children: [
@@ -382,6 +409,7 @@ class _PetDetailsScreenState extends State<PetDetailsScreen> {
                 boxShadow: AppShadows.card,
               ),
               child: ListTile(
+                onTap: () => _showHealthEventDialog(eventToEdit: event),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 title: Text(
                   event.title,
@@ -481,6 +509,21 @@ class _PetDetailsScreenState extends State<PetDetailsScreen> {
     }
   }
 
+  IconData _getEventIcon(String type) {
+    switch (type) {
+      case 'Vaccine':
+        return Icons.medical_services;
+      case 'Surgery':
+        return Icons.local_hospital;
+      case 'Checkup':
+        return Icons.monitor_heart;
+      case 'Dental':
+        return Icons.cleaning_services; // Or similar
+      default:
+        return Icons.event_note;
+    }
+  }
+
   IconData _getIconForGender(String gender) {
      if (gender == 'Male') return Icons.male;
      if (gender == 'Female') return Icons.female;
@@ -491,63 +534,448 @@ class _PetDetailsScreenState extends State<PetDetailsScreen> {
     return '${date.day}/${date.month}/${date.year}';
   }
 
-  Future<void> _showAddEventDialog() async {
-    final titleController = TextEditingController();
-    final typeController = TextEditingController(text: 'Checkup');
-    final dateController = TextEditingController(text: DateTime.now().toIso8601String().split('T')[0]);
-    
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add Health Event'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-             TextField(
-               controller: titleController,
-               decoration: const InputDecoration(labelText: 'Title (e.g. Annual Checkup)'),
+  Widget _buildCareTasksSection() {
+    return StreamBuilder<List<LocalCareTask>>(
+       stream: AppDatabase.instance.watchCareTasks(_pet.id),
+       builder: (context, snapshot) {
+         final tasks = snapshot.data ?? [];
+         
+         return Column(
+           crossAxisAlignment: CrossAxisAlignment.start,
+           children: [
+             Row(
+               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+               children: [
+                 Text(
+                   'Daily Care',
+                   style: TextStyle(
+                     fontSize: 20,
+                     fontWeight: FontWeight.bold,
+                     color: AppColors.charcoal,
+                   ),
+                 ),
+                 IconButton(
+                   onPressed: _showAddCareTaskDialog,
+                   icon: Container(
+                     padding: const EdgeInsets.all(4),
+                     decoration: BoxDecoration(
+                       color: AppColors.secondary.withAlpha(26),
+                       borderRadius: BorderRadius.circular(8),
+                     ),
+                     child: const Icon(Icons.add, color: AppColors.secondary, size: 20),
+                   ),
+                 ),
+               ],
              ),
              const SizedBox(height: 12),
-             DropdownButtonFormField<String>(
-                initialValue: 'Checkup',
-                items: ['Checkup', 'Vaccine', 'Surgery', 'Dental', 'Other'].map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
-                onChanged: (v) => typeController.text = v!,
-                decoration: const InputDecoration(labelText: 'Type'),
-             ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () async {
-              if (titleController.text.isEmpty) return;
-              try {
-                  final newEvent = PetHealthEvent(
-                  id: 0, // DB handles ID
-                  petId: _pet.id, // ID is already String UUID
-                  title: titleController.text,
-                  date: DateTime.now(), // Simplified
-                  type: typeController.text,
-                );
-                await _petService.addHealthEvent(newEvent);
-                if (mounted) {
-                   Navigator.pop(context);
-                   _fetchHealthEvents();
-                   AppNotifications.showSuccess(context, 'Event added');
-                }
-              } catch (e) {
-                 // 
-              }
-            }, 
-            child: const Text('Add'),
-          ),
-        ],
-      )
+             if (tasks.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.borderLight),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(Icons.check_circle_outline, size: 40, color: AppColors.slate.withAlpha(77)),
+                      const SizedBox(height: 8),
+                      Text('No care tasks set', style: TextStyle(color: AppColors.slate)),
+                    ],
+                  ),
+                )
+             else
+               ...tasks.map((task) {
+                  final now = DateTime.now();
+                  final isCompletedToday = task.lastCompletedAt != null && 
+                      task.lastCompletedAt!.year == now.year &&
+                      task.lastCompletedAt!.month == now.month &&
+                      task.lastCompletedAt!.day == now.day;
+
+                  return Dismissible(
+                    key: ValueKey(task.id),
+                    direction: DismissDirection.endToStart,
+                    background: Container(
+                      alignment: Alignment.centerRight,
+                      padding: const EdgeInsets.only(right: 20),
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: AppColors.error,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.delete, color: Colors.white),
+                    ),
+                    onDismissed: (_) async {
+                       await AppDatabase.instance.deleteCareTask(task.id);
+                       if (mounted) AppNotifications.showSuccess(context, 'Task deleted');
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isCompletedToday ? AppColors.secondary.withAlpha(77) : AppColors.borderLight,
+                        ),
+                        boxShadow: AppShadows.card,
+                      ),
+                      child: ListTile(
+                        onTap: () async {
+                           final newState = !isCompletedToday;
+                           await AppDatabase.instance.toggleCareTask(
+                             task.id, 
+                             newState ? DateTime.now() : null
+                           );
+                           if (newState && mounted) {
+                              // Simple haptic or snackbar feedback
+                              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Good job! ${task.title} completed.'),
+                                  backgroundColor: AppColors.secondary,
+                                  duration: const Duration(seconds: 1),
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                              );
+                           }
+                        },
+                        leading: Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: isCompletedToday ? AppColors.secondary : Colors.transparent,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: isCompletedToday ? AppColors.secondary : AppColors.slate.withAlpha(100),
+                              width: 2,
+                            ),
+                          ),
+                          child: isCompletedToday 
+                              ? const Icon(Icons.check, size: 16, color: Colors.white)
+                              : null,
+                        ),
+                        title: Text(
+                          task.title,
+                          style: TextStyle(
+                            decoration: isCompletedToday ? TextDecoration.lineThrough : null,
+                            color: isCompletedToday ? AppColors.slate : AppColors.charcoal,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        trailing: task.frequency == 'daily' 
+                           ? const Icon(Icons.repeat, size: 16, color: AppColors.slate)
+                           : null,
+                      ),
+                    ),
+                  );
+               }).toList(),
+           ],
+         );
+       }
     );
-    // Note: The simple dialog above is minimal. Real implementation should use proper date picker and inputs. 
-    // For now, removing the implementation to avoid complexity in this step if not critical, 
-    // OR implementing it cleanly. 
-    // Let's implement it cleanly later or now? 
-    // Providing a placeholder implementation for now essentially.
+  }
+
+  Future<void> _showAddCareTaskDialog() async {
+     final controller = TextEditingController();
+     
+     await showModalBottomSheet(
+       context: context,
+       isScrollControlled: true,
+       backgroundColor: Colors.transparent,
+       builder: (context) => Container(
+          padding: EdgeInsets.only(
+             bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+             top: 24,
+             left: 24,
+             right: 24,
+          ),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+               Text(
+                 'New Daily Task',
+                 style: TextStyle(
+                   fontSize: 20, 
+                   fontWeight: FontWeight.bold,
+                   color: AppColors.charcoal,
+                 ),
+               ),
+               const SizedBox(height: 16),
+               PetInput(
+                 controller: controller,
+                 labelText: 'Task Name',
+                 hintText: 'e.g. Morning Walk, Medicine',
+                 autoFocus: true,
+               ),
+               const SizedBox(height: 24),
+               SizedBox(
+                 width: double.infinity,
+                 child: PetButton(
+                   text: 'Add Task',
+                   onPressed: () async {
+                      if (controller.text.trim().isNotEmpty) {
+                         await AppDatabase.instance.addCareTask(
+                           LocalCareTasksCompanion(
+                             petId: Value(_pet.id),
+                             title: Value(controller.text.trim()),
+                             createdAt: Value(DateTime.now()),
+                           ),
+                         );
+                         if (mounted) Navigator.pop(context);
+                      }
+                   },
+                 ),
+               ),
+            ],
+          ),
+       ),
+     );
+  }
+
+  Future<void> _showHealthEventDialog({LocalHealthEvent? eventToEdit}) async {
+    final isEditing = eventToEdit != null;
+    final titleController = TextEditingController(text: eventToEdit?.title ?? '');
+    final notesController = TextEditingController(text: eventToEdit?.notes ?? '');
+    String selectedType = eventToEdit?.type ?? 'Checkup';
+    DateTime selectedDate = eventToEdit?.date ?? DateTime.now();
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+            top: 24,
+            left: 24,
+            right: 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                   Text(
+                    isEditing ? 'Edit Health Event' : 'Add Health Event',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.charcoal,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: Icon(Icons.close, color: AppColors.slate),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              
+              // Title Input
+              PetInput(
+                autoFocus: !isEditing,
+                controller: titleController,
+                labelText: 'Event Title',
+                hintText: 'e.g. Annual Checkup',
+                prefixIcon: Icons.title,
+                textInputAction: TextInputAction.next,
+              ),
+              const SizedBox(height: 16),
+
+              // Date Picker
+              _buildDatePicker(selectedDate, (date) => setState(() => selectedDate = date)),
+              const SizedBox(height: 16),
+
+              // Type Dropdown (Custom styled)
+              _buildTypeDropdown(selectedType, (val) => setState(() => selectedType = val)),
+              const SizedBox(height: 16),
+
+              // Notes Input
+              PetInput(
+                controller: notesController,
+                labelText: 'Notes (Optional)',
+                hintText: 'Add any details...',
+                prefixIcon: Icons.format_quote_rounded,
+                maxLines: 3,
+                textInputAction: TextInputAction.done,
+              ),
+              const SizedBox(height: 32),
+
+              // Actions
+              Row(
+                children: [
+                  if (isEditing)
+                    Expanded(
+                      flex: 1,
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: PetButton(
+                          text: 'Delete',
+                          isOutlined: true,
+                          borderColor: AppColors.error,
+                          textColor: AppColors.error,
+                          onPressed: () async {
+                             final confirmed = await showDialog<bool>(
+                                context: context,
+                                builder: (_) => ConfirmationDialog(
+                                  title: 'Delete Event?',
+                                  message: 'Are you sure you want to delete this event?',
+                                  confirmText: 'Delete',
+                                  isDestructive: true,
+                                ),
+                             );
+                             
+                             if (confirmed == true) {
+                               await AppDatabase.instance.deleteHealthEvent(eventToEdit!.id);
+                               if (mounted) {
+                                 Navigator.pop(context); // Close modal
+                               }
+                             }
+                          },
+                        ),
+                      ),
+                    ),
+                  
+                  Expanded(
+                    flex: 2,
+                    child: PetButton(
+                      text: isEditing ? 'Save Changes' : 'Add Event',
+                      height: 50,
+                      onPressed: () async {
+                        if (titleController.text.isNotEmpty) {
+                          if (isEditing) {
+                            await AppDatabase.instance.updateHealthEvent(
+                              eventToEdit!.id,
+                              LocalHealthEventsCompanion(
+                                title: Value(titleController.text),
+                                date: Value(selectedDate),
+                                type: Value(selectedType),
+                                notes: Value(notesController.text),
+                              ),
+                            );
+                          } else {
+                            await AppDatabase.instance.addHealthEvent(
+                              LocalHealthEventsCompanion(
+                                petId: Value(_pet.id),
+                                title: Value(titleController.text),
+                                date: Value(selectedDate),
+                                type: Value(selectedType),
+                                notes: Value(notesController.text),
+                                createdAt: Value(DateTime.now()),
+                              ),
+                            );
+                          }
+                          if (mounted) Navigator.pop(context);
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDatePicker(DateTime date, Function(DateTime) onSelect) {
+     return InkWell(
+       onTap: () async {
+         final picked = await showDatePicker(
+           context: context,
+           initialDate: date,
+           firstDate: DateTime(2000),
+           lastDate: DateTime(2100),
+           builder: (context, child) {
+              return Theme(
+                data: Theme.of(context).copyWith(
+                  colorScheme: ColorScheme.light(
+                    primary: AppColors.primary,
+                    onPrimary: Colors.white,
+                    onSurface: AppColors.charcoal,
+                  ),
+                ),
+                child: child!,
+              );
+           },
+         );
+         if (picked != null) onSelect(picked);
+       },
+       borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+       child: Container(
+         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+         decoration: BoxDecoration(
+           color: AppColors.backgroundLight,
+           borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+           border: Border.all(color: AppColors.borderLight),
+         ),
+         child: Row(
+           children: [
+             Icon(Icons.calendar_today_rounded, color: AppColors.textSecondary),
+             const SizedBox(width: 12),
+             Column(
+               crossAxisAlignment: CrossAxisAlignment.start,
+               children: [
+                 Text('Date', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                 const SizedBox(height: 2),
+                 Text(
+                   '${date.day}/${date.month}/${date.year}', 
+                   style: TextStyle(color: AppColors.charcoal, fontSize: 16),
+                 ),
+               ],
+             ),
+           ],
+         ),
+       ),
+     );
+  }
+
+  Widget _buildTypeDropdown(String current, Function(String) onChanged) {
+    final types = ['Checkup', 'Vaccine', 'Surgery', 'Dental', 'Other'];
+    return Container(
+         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+         decoration: BoxDecoration(
+           color: AppColors.backgroundLight,
+           borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+           border: Border.all(color: AppColors.borderLight),
+         ),
+         child: DropdownButtonHideUnderline(
+           child: DropdownButton<String>(
+             dropdownColor: Colors.white,
+             value: current,
+             isExpanded: true,
+             icon: Icon(Icons.arrow_drop_down, color: AppColors.textSecondary),
+             items: types.map((t) {
+               return DropdownMenuItem(
+                 value: t,
+                 child: Row(
+                   children: [
+                     Icon(_getEventIcon(t), size: 20, color: _getEventColor(t)),
+                     const SizedBox(width: 12),
+                     Text(t, style: TextStyle(color: AppColors.charcoal)),
+                   ],
+                 ),
+               );
+             }).toList(),
+             onChanged: (v) => onChanged(v!),
+           ),
+         ),
+    );
   }
 }

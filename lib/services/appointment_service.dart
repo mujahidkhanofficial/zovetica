@@ -20,9 +20,16 @@ class AppointmentService {
     final userId = SupabaseService.currentUser?.id;
     if (userId == null) throw Exception('User not authenticated');
 
+    // Robustly resolve doctor_id (handle if user passed UserID instead of DoctorID)
+    String finalDoctorId = doctorId;
+    final resolvedId = await _getDoctorIdFromUserId(doctorId);
+    if (resolvedId != null) {
+      finalDoctorId = resolvedId;
+    }
+
     await _client.from(_tableName).insert({
       'user_id': userId,
-      'doctor_id': doctorId,
+      'doctor_id': finalDoctorId,
       'pet_id': petId,
       'date': date.toIso8601String().split('T')[0],
       'time': time,
@@ -89,8 +96,16 @@ class AppointmentService {
       final response = await _client
           .from(_tableName)
           .select()
-          .eq('doctor_id', doctorId)
+          .eq('doctor_id', doctorId) // Querying by Doctor Table ID
           .order('date', ascending: true);
+
+      debugPrint('✅ Query successful. Found ${response.length} raw appointments.');
+      if (response.isNotEmpty) {
+        for (var i = 0; i < response.length; i++) {
+          final r = response[i];
+          debugPrint('📄 Appt #$i: ID=${r['id']}, Date=${r['date']}, Time=${r['time']}, Status=${r['status']}, UserID=${r['user_id']}');
+        }
+      }
 
       debugPrint('Raw response: ${response.length} items');
       
@@ -134,6 +149,7 @@ class AppointmentService {
         appointments.add(Appointment(
           id: data['id'] is int ? data['id'] : data['id'].hashCode,
           uuid: data['id']?.toString(), // Store actual UUID for updates
+          doctorId: data['doctor_id']?.toString(), // CRITICAL FIX: Store doctor ID for local query filtering
           doctor: patientData['name'] ?? 'Unknown Patient',
           doctorImage: patientData['profile_image'], // Map patient image to avatar slot
           clinic: 'Pet Owner', // Show role instead of fake clinic
@@ -202,6 +218,7 @@ class AppointmentService {
   }
 
   /// Reschedule appointment (update date and time)
+  /// Sets status to 'rescheduled_pending' for pet owner approval
   Future<void> rescheduleAppointment({
     required String appointmentId,
     required String newDate,
@@ -212,7 +229,7 @@ class AppointmentService {
         .update({
           'date': newDate,
           'time': newTime,
-          'status': 'pending', // Reset to pending for doctor approval
+          'status': 'rescheduled_pending', // Pet owner needs to accept/reject
         })
         .eq('id', appointmentId);
   }
@@ -221,15 +238,18 @@ class AppointmentService {
   /// Since doctors are stored in both 'users' (user_id) and 'doctors' (doctor_id) tables
   Future<String?> _getDoctorIdFromUserId(String userId) async {
     try {
+      debugPrint('🔍 Resolving Doctor ID for User ID: $userId');
       final response = await _client
           .from('doctors')
           .select('id')
           .eq('user_id', userId)
           .maybeSingle();
       
-      return response?['id']?.toString();
+      final foundId = response?['id']?.toString();
+      debugPrint('✅ Resolved Doctor ID: $foundId');
+      return foundId;
     } catch (e) {
-      debugPrint('Error getting doctor ID: $e');
+      debugPrint('❌ Error getting doctor ID: $e');
       return null;
     }
   }

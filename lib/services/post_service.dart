@@ -24,7 +24,10 @@ class PostService {
       // Offload parsing to background isolate
       final posts = await compute(_parsePosts, response as List<dynamic>);
       
-      final postsWithLikes = await _enrichPostsWithLikeStatus(posts);
+      // Enrich with real user data (Client-side join)
+      final postsWithUsers = await _enrichPostsWithUserData(posts);
+      
+      final postsWithLikes = await _enrichPostsWithLikeStatus(postsWithUsers);
       return postsWithLikes;
     } catch (e) {
       debugPrint('Error fetching posts: $e');
@@ -43,8 +46,11 @@ class PostService {
 
       // Offload parsing to background isolate
       final posts = await compute(_parsePosts, response as List<dynamic>);
+      
+      // User data is already known (it's this user), but run through enrichment for consistency/updates
+      final postsWithUsers = await _enrichPostsWithUserData(posts);
 
-      final postsWithLikes = await _enrichPostsWithLikeStatus(posts);
+      final postsWithLikes = await _enrichPostsWithLikeStatus(postsWithUsers);
       return postsWithLikes;
     } catch (e) {
       debugPrint('Error fetching user posts: $e');
@@ -475,6 +481,45 @@ class PostService {
     } catch (e) {
       debugPrint('Error enriching posts with likes: $e');
       return posts;
+    }
+  }
+
+  Future<List<Post>> _enrichPostsWithUserData(List<Post> posts) async {
+    if (posts.isEmpty) return posts;
+
+    try {
+      // Get unique User IDs
+      final userIds = posts.map((p) => p.author.id).toSet().toList();
+      
+      // Fetch fresh profiles
+      final profiles = await _client
+          .from('users')
+          .select('id, name, profile_image, role')
+          .inFilter('id', userIds);
+      
+      // Map for quick lookup
+      final profileMap = {
+        for (var p in profiles) 
+          p['id'] as String: p
+      };
+
+      // Update posts
+      return posts.map((post) {
+        final profile = profileMap[post.author.id];
+        if (profile != null) {
+          return post.copyWith(
+            author: post.author.copyWith(
+              name: profile['name'],
+              profileImage: profile['profile_image'],
+              role: (profile['role'] == 'doctor') ? UserRole.doctor : UserRole.petOwner,
+            ),
+          );
+        }
+        return post;
+      }).toList();
+    } catch (e) {
+       debugPrint('Error enriching posts with user data: $e');
+       return posts; // Fallback to existing stale data
     }
   }
 }

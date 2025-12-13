@@ -354,7 +354,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
           ),
           // Chat List
           SliverToBoxAdapter(
-            child: RefreshIndicator(
+            child: AppRefreshIndicator(
               onRefresh: _handleRefresh,
               child: StreamBuilder<List<Map<String, dynamic>>>(
                 key: _streamKey,

@@ -4,6 +4,8 @@ import '../theme/app_colors.dart';
 import '../theme/app_gradients.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_shadows.dart';
+import '../data/repositories/notification_repository.dart';
+import '../data/local/database.dart';
 
 class NotificationScreen extends StatefulWidget {
   const NotificationScreen({super.key});
@@ -13,9 +15,10 @@ class NotificationScreen extends StatefulWidget {
 }
 
 class _NotificationScreenState extends State<NotificationScreen> {
-  final NotificationService _service = NotificationService();
+  final NotificationRepository _notificationRepo = NotificationRepository.instance;
 
   String _formatTimeAgo(String? dateStr) {
+    // ... (keep existing implementation, or better yet, format DateTime directly)
     if (dateStr == null) return '';
     try {
       final date = DateTime.parse(dateStr);
@@ -28,6 +31,16 @@ class _NotificationScreenState extends State<NotificationScreen> {
     } catch (e) {
       return '';
     }
+  }
+  
+  // Overload for DateTime
+  String _formatDateTimeAgo(DateTime date) {
+      final diff = DateTime.now().difference(date);
+      if (diff.inMinutes < 1) return 'Just now';
+      if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+      if (diff.inHours < 24) return '${diff.inHours}h ago';
+      if (diff.inDays < 7) return '${diff.inDays}d ago';
+      return '${date.day}/${date.month}';
   }
 
   @override
@@ -54,7 +67,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
         actions: [
           IconButton(
             onPressed: () {
-              _service.markAllAsRead();
+              _notificationRepo.markAllAsRead();
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('All marked as read')),
               );
@@ -65,8 +78,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
         ],
       ),
       body: SafeArea(
-        child: StreamBuilder<List<Map<String, dynamic>>>(
-          stream: _service.getNotificationsStream(),
+        child: StreamBuilder<List<LocalNotification>>(
+          stream: _notificationRepo.watchNotifications(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
@@ -127,9 +140,9 @@ class _NotificationScreenState extends State<NotificationScreen> {
               itemCount: notifications.length,
               itemBuilder: (context, index) {
                 final n = notifications[index];
-                final isRead = n['is_read'] ?? false;
-                final type = n['type'];
-                final timeAgo = _formatTimeAgo(n['created_at']);
+                final isRead = n.isRead;
+                final type = n.type;
+                final timeAgo = _formatDateTimeAgo(n.createdAt);
   
                 IconData icon;
                 Color color;
@@ -176,7 +189,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                     child: InkWell(
                       borderRadius: BorderRadius.circular(16),
                       onTap: () {
-                        _service.markAsRead(n['id']);
+                        _notificationRepo.markAsRead(n.id);
                         // TODO: Navigate to related content
                       },
                       child: Padding(
@@ -203,7 +216,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                                     children: [
                                       Expanded(
                                         child: Text(
-                                          n['title'] ?? '',
+                                          n.title,
                                           style: TextStyle(
                                             fontSize: 15,
                                             fontWeight: FontWeight.w600,
@@ -224,7 +237,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    n['body'] ?? '',
+                                    n.body,
                                     style: TextStyle(
                                       fontSize: 14,
                                       color: AppColors.slate,

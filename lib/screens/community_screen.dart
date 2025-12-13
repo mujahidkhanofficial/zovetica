@@ -11,7 +11,12 @@ import '../services/supabase_service.dart';
 import '../utils/image_picker_helper.dart';
 import '../widgets/post_card.dart';
 import '../widgets/comments_sheet.dart';
+import '../widgets/offline_banner.dart';
+import '../widgets/widgets.dart';
 import 'friends_screen.dart';
+import '../data/repositories/post_repository.dart';
+import '../data/repositories/user_repository.dart';
+import '../services/auth_service.dart';
 
 class CommunityScreen extends StatefulWidget {
   const CommunityScreen({super.key});
@@ -25,11 +30,14 @@ class _CommunityScreenState extends State<CommunityScreen>
   final TextEditingController _postController = TextEditingController();
   late AnimationController _heartAnimationController;
   final PostService _postService = PostService();
-  final UserService _userService = UserService(); // Add UserService
+  final UserService _userService = UserService();
+  final AuthService _authService = AuthService();
+  final PostRepository _postRepo = PostRepository.instance;
   
   Map<String, dynamic>? _currentUserProfile; // Store user profile
   File? _selectedImage;
   bool _isLoading = true;
+  final Map<int, bool> _showHeartOverlay = {};
 
   List<Post> _posts = [];
 
@@ -46,8 +54,24 @@ class _CommunityScreenState extends State<CommunityScreen>
 
   Future<void> _fetchUserProfile() async {
     try {
+      final userId = _authService.currentUser?.id;
+      if (userId == null) return;
+
+      // Local first
+      final localUser = await UserRepository.instance.getUser(userId);
+      if (localUser != null && mounted) {
+        setState(() {
+          _currentUserProfile = {
+            'name': localUser.name,
+            'profile_image': localUser.profileImage,
+            'role': localUser.role,
+          };
+        });
+      }
+      
+      // Then sync if needed
       final profile = await _userService.getCurrentUser();
-      if (mounted) {
+      if (profile != null && mounted) {
         setState(() {
           _currentUserProfile = profile;
         });
@@ -60,14 +84,25 @@ class _CommunityScreenState extends State<CommunityScreen>
   Future<void> _initializePosts() async {
     setState(() => _isLoading = true);
     try {
-      final posts = await _postService.fetchPosts();
+      // Local first
+      final localPosts = await _postRepo.getPosts();
+      if (localPosts.isNotEmpty) {
+        setState(() {
+          _posts = localPosts.map(_postRepo.localPostToPost).toList();
+          _isLoading = false;
+        });
+      }
+      
+      // Then sync
+      await _postRepo.syncPosts();
+      final updatedPosts = await _postRepo.getPosts();
       setState(() {
-        _posts = posts;
+        _posts = updatedPosts.map(_postRepo.localPostToPost).toList();
       });
     } catch (e) {
       debugPrint('Error loading posts: $e');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -91,58 +126,38 @@ class _CommunityScreenState extends State<CommunityScreen>
     super.dispose();
   }
 
-    void _toggleLike(int postId) async {
-    // Optimistic UI update
+  void _toggleLike(int postId) async {
+    final postIndex = _posts.indexWhere((p) => p.id == postId);
+    if (postIndex == -1) return;
+    
+    final post = _posts[postIndex];
+    
+    // 1. Optimistic UI update
     setState(() {
-      final index = _posts.indexWhere((post) => post.id == postId);
-      if (index != -1) {
-        final post = _posts[index];
-        _posts[index] = Post(
-          id: post.id,
-          author: post.author,
-          content: post.content,
-          imageUrl: post.imageUrl,
-          timestamp: post.timestamp,
-          likesCount: post.isLiked ? post.likesCount - 1 : post.likesCount + 1,
-          commentsCount: post.commentsCount,
-          isLiked: !post.isLiked,
-          tags: post.tags,
-        );
-      }
+      _posts[postIndex] = Post(
+        id: post.id,
+        author: post.author,
+        content: post.content,
+        imageUrl: post.imageUrl,
+        timestamp: post.timestamp,
+        likesCount: post.isLiked ? post.likesCount - 1 : post.likesCount + 1,
+        commentsCount: post.commentsCount,
+        isLiked: !post.isLiked,
+        tags: post.tags,
+      );
     });
 
-    // Heart animation for like
-    final post = _posts.firstWhere((p) => p.id == postId);
-    if (post.isLiked) {
+    // 2. Play animation if liking
+    if (!post.isLiked) {
       _heartAnimationController.forward().then((_) {
         _heartAnimationController.reverse();
       });
     }
 
-    // Persist to database
-    try {
-      await _postService.toggleLike(postId);
-    } catch (e) {
-      debugPrint('Error persisting like: $e');
-      // Revert on error
-      setState(() {
-        final index = _posts.indexWhere((p) => p.id == postId);
-        if (index != -1) {
-          final p = _posts[index];
-          _posts[index] = Post(
-            id: p.id,
-            author: p.author,
-            content: p.content,
-            imageUrl: p.imageUrl,
-            timestamp: p.timestamp,
-            likesCount: p.isLiked ? p.likesCount - 1 : p.likesCount + 1,
-            commentsCount: p.commentsCount,
-            isLiked: !p.isLiked,
-            tags: p.tags,
-          );
-        }
-      });
-    }
+    // 3. Delegate to repository
+    // Note: The repository handles sync and reversion on failure internally
+    // We pass the OLD state (layout before toggle) to allow revert if needed
+    await _postRepo.toggleLike(postId, post.isLiked, post.likesCount);
   }
 
   // Double Tap Animation State
@@ -169,7 +184,7 @@ class _CommunityScreenState extends State<CommunityScreen>
     });
   }
   
-  final Map<int, bool> _showHeartOverlay = {};
+
 
   void _showCreatePostDialog() {
     setState(() {
@@ -266,15 +281,11 @@ class _CommunityScreenState extends State<CommunityScreen>
                   children: [
                     Row(
                       children: [
-                        CircleAvatar(
+                        CachedAvatar(
+                          imageUrl: _currentUserProfile?['profile_image'],
+                          name: _currentUserProfile?['name'] ?? 'Pet Parent',
                           radius: 22,
-                          backgroundImage: (_currentUserProfile != null && _currentUserProfile!['profile_image'] != null && _currentUserProfile!['profile_image'].toString().isNotEmpty)
-                              ? NetworkImage(_currentUserProfile!['profile_image'])
-                              : null,
                           backgroundColor: AppColors.primary,
-                          child: (_currentUserProfile == null || _currentUserProfile!['profile_image'] == null || _currentUserProfile!['profile_image'].toString().isEmpty)
-                              ? const Icon(Icons.person, color: Colors.white)
-                              : null,
                         ),
                         const SizedBox(width: 12),
                         Column(
@@ -520,7 +531,8 @@ class _CommunityScreenState extends State<CommunityScreen>
           ),
         ],
       ),
-      body: Column(
+      body: OfflineAwareBody(
+        child: Column(
         children: [
             Container(
               padding: const EdgeInsets.all(16),
@@ -532,23 +544,11 @@ class _CommunityScreenState extends State<CommunityScreen>
               ),
               child: Row(
                 children: [
-                  CircleAvatar(
+                  CachedAvatar(
+                    imageUrl: _currentUserProfile?['profile_image'],
+                    name: _currentUserProfile?['name'] ?? 'U',
                     radius: 20,
                     backgroundColor: AppColors.primary,
-                    backgroundImage: (_currentUserProfile?['profile_image']?.toString() ?? '').isNotEmpty
-                        ? NetworkImage(_currentUserProfile?['profile_image'])
-                        : null,
-                    child: (_currentUserProfile?['profile_image']?.toString() ?? '').isEmpty
-                        ? Text(
-                            (_currentUserProfile?['name']?.toString() ?? 'U').isNotEmpty 
-                                ? (_currentUserProfile?['name']?.toString() ?? 'U')[0].toUpperCase() 
-                                : 'U',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          )
-                        : null,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -595,10 +595,8 @@ class _CommunityScreenState extends State<CommunityScreen>
               ),
             ),
             Expanded(
-              child: RefreshIndicator(
+              child: AppRefreshIndicator(
                 onRefresh: _initializePosts,
-                color: AppColors.primary,
-                backgroundColor: Colors.white,
                 child: ListView.builder(
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.only(top: AppSpacing.md, bottom: 80),
@@ -611,6 +609,7 @@ class _CommunityScreenState extends State<CommunityScreen>
             ),
           ],
         ),
+      ),
     );
   }
 

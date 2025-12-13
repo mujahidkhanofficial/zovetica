@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/app_models.dart';
 import '../theme/app_gradients.dart';
 import '../screens/profile_screen.dart';
+import '../widgets/widgets.dart';
 
 /// Reusable Facebook-style Post Card Widget - Enterprise Level
 class PostCard extends StatelessWidget {
@@ -121,26 +122,11 @@ class PostCard extends StatelessWidget {
                 shape: BoxShape.circle,
                 gradient: AppGradients.primaryDiagonal,
               ),
-              child: CircleAvatar(
-                radius: 22,
+              child: CachedAvatar(
+                name: post.author.name,
+                imageUrl: post.author.profileImage,
+                radius: 20,
                 backgroundColor: Colors.white,
-                child: CircleAvatar(
-                  radius: 20,
-                  backgroundColor: Colors.teal.withAlpha(30),
-                  backgroundImage: post.author.profileImage.isNotEmpty
-                      ? NetworkImage(post.author.profileImage)
-                      : null,
-                  child: post.author.profileImage.isEmpty
-                      ? Text(
-                          _getAuthorInitials(),
-                          style: TextStyle(
-                            color: Colors.teal[700],
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                          ),
-                        )
-                      : null,
-                ),
               ),
             ),
           ),
@@ -235,28 +221,21 @@ class PostCard extends StatelessWidget {
                     width: double.infinity,
                     fit: BoxFit.cover,
                   )
-                : Image.network(
-                    post.imageUrl!,
+                : CachedImage(
+                    imageUrl: post.imageUrl!,
                     width: double.infinity,
                     fit: BoxFit.cover,
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return Container(
-                        height: 250,
-                        color: Colors.grey[100],
-                        child: Center(
-                          child: CircularProgressIndicator(
-                            value: loadingProgress.expectedTotalBytes != null
-                                ? loadingProgress.cumulativeBytesLoaded /
-                                    loadingProgress.expectedTotalBytes!
-                                : null,
-                            strokeWidth: 2,
-                            color: Colors.teal,
-                          ),
+                    placeholder: Container(
+                      height: 250,
+                      color: Colors.grey[100],
+                      child: const Center(
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.teal,
                         ),
-                      );
-                    },
-                    errorBuilder: (context, error, stackTrace) => Container(
+                      ),
+                    ),
+                    errorWidget: Container(
                       height: 200,
                       color: Colors.grey[100],
                       child: Center(

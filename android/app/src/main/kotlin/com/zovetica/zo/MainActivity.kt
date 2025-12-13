@@ -1,4 +1,4 @@
-package com.example.zovetica
+package com.zovetica.zo
 
 import io.flutter.embedding.android.FlutterActivity
 

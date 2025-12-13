@@ -5,6 +5,8 @@ import '../theme/app_colors.dart';
 import '../theme/app_gradients.dart';
 import '../theme/app_spacing.dart';
 import 'book_appointment_wizard.dart';
+import '../data/repositories/doctor_repository.dart';
+import '../widgets/widgets.dart';
 
 class FindDoctorScreen extends StatefulWidget {
   const FindDoctorScreen({super.key});
@@ -17,6 +19,7 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
   final TextEditingController _searchController = TextEditingController();
   final DoctorService _doctorService = DoctorService();
   final UserService _userService = UserService();
+  final DoctorRepository _doctorRepo = DoctorRepository.instance;
 
   List<Map<String, dynamic>> _doctors = [];
   List<Map<String, dynamic>> _filteredDoctors = [];
@@ -36,44 +39,75 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
 
   Future<void> _fetchDoctors() async {
     try {
-      final doctors = await _doctorService.getDoctors();
+      // Helper to process and display doctors
+      void updateDoctorsList(List<dynamic> doctorsList) {
+        // Convert to Doctor model if needed (handles both Doctor and LocalDoctor inputs if we normalized, but here we just Convert LocalDoctor -> Doctor)
+        // Actually, let's just assume we always work with Doctor models after repo conversion
+        
+        List<Map<String, dynamic>> doctorMaps = doctorsList.map((d) {
+           // d is Doctor model
+           return {
+            'id': d.id.toString(), // Doctor Table ID
+            'user_id': d.userId,   // User Table ID (CRITICAL Fix)
+            'name': d.name,
+            'firstName': d.name.split(' ').first,
+            'lastName': d.name.split(' ').length > 1 ? d.name.split(' ').last : '',
+            'specialty': d.specialty,
+            'location': d.clinic,
+            'clinic': d.clinic,
+            'image': d.image,
+            'profile_image': d.image,
+            'rating': d.rating,
+            'reviews_count': d.reviews,
+            'contact': '',
+          };
+        }).toList();
 
-      List<Map<String, dynamic>> doctorMaps = doctors.map((d) {
-        return {
-          'id': d.id.toString(),
-          'name': d.name,
-          'firstName': d.name.split(' ').first,
-          'lastName': d.name.split(' ').length > 1 ? d.name.split(' ').last : '',
-          'specialty': d.specialty,
-          'location': d.clinic,
-          'clinic': d.clinic,
-          'image': d.image,
-          'profile_image': d.image, // Doctor's profile image
-          'rating': d.rating,
-          'reviews_count': d.reviews,
-          'contact': '',
-        };
-      }).toList();
+        _specialties = ['All'] +
+            doctorMaps
+                .map((d) => d['specialty']?.toString() ?? 'Unknown')
+                .toSet()
+                .toList();
 
-      _specialties = ['All'] +
-          doctorMaps
-              .map((d) => d['specialty']?.toString() ?? 'Unknown')
-              .toSet()
-              .toList();
+        _locations = ['All'] +
+            doctorMaps
+                .map((d) => d['location']?.toString() ?? 'Unknown')
+                .toSet()
+                .toList();
 
-      _locations = ['All'] +
-          doctorMaps
-              .map((d) => d['location']?.toString() ?? 'Unknown')
-              .toSet()
-              .toList();
+        setState(() {
+          _doctors = doctorMaps;
+          _filteredDoctors = doctorMaps; // Reset filter on new data
+          if (_selectedSpecialty == null) {
+             _selectedSpecialty = 'All';
+             _selectedLocation = 'All';
+          }
+          _isLoading = false;
+        });
+        
+        // Re-apply filters if they exist
+        if (_searchController.text.isNotEmpty || _selectedSpecialty != 'All' || _selectedLocation != 'All') {
+          _filterDoctors();
+        }
+      }
 
-      setState(() {
-        _doctors = doctorMaps;
-        _filteredDoctors = doctorMaps;
-        _selectedSpecialty = 'All';
-        _selectedLocation = 'All';
-        _isLoading = false;
-      });
+      // 1. Load from local cache immediately
+      final localDoctors = await _doctorRepo.getDoctors();
+      if (localDoctors.isNotEmpty) {
+        final doctors = localDoctors.map(_doctorRepo.localDoctorToDoctor).toList();
+        updateDoctorsList(doctors);
+      } else {
+        setState(() => _isLoading = true);
+      }
+
+      // 2. Sync from server
+      await _doctorRepo.syncDoctors();
+      
+      // 3. Update from cache again (guaranteed fresh)
+      final updatedLocal = await _doctorRepo.getDoctors();
+      final doctors = updatedLocal.map(_doctorRepo.localDoctorToDoctor).toList();
+      updateDoctorsList(doctors);
+      
     } catch (e) {
       debugPrint("Error fetching doctors: $e");
       setState(() => _isLoading = false);
@@ -101,20 +135,65 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
 
   void _showDoctorDetails(Map<String, dynamic> doctor) async {
     try {
-      final data = await _userService.getUserById(doctor['id']);
-      if (data == null) return;
-
-      final contact = data['phone'] ?? '';
+      // Use user_id if available, otherwise try id (fallback)
+      final targetId = doctor['user_id'] ?? doctor['id'];
+      
+      // If we already have most info in 'doctor' map, we should fallback to showing it 
+      // even if user fetch fails. But let's try to fetch user details first.
+      
+      final data = await _userService.getUserById(targetId);
       
       if (!mounted) return;
-      showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (context) => _buildDoctorBottomSheet(data, contact),
-      );
+      
+      if (data != null) {
+        final contact = data['phone'] ?? '';
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (context) => _buildDoctorBottomSheet(data, contact),
+        );
+      } else {
+        // Fallback: Show bottom sheet with existing doctor data if user fetch failed
+        // We construct a 'data' map from 'doctor' map to reuse the widget
+        final fallbackData = {
+          'id': doctor['id'],
+          'name': doctor['name'],
+          'profile_image': doctor['image'],
+          'specialty': doctor['specialty'],
+          'clinic': doctor['clinic'],
+          'rating': doctor['rating'],
+          'reviews_count': doctor['reviews_count'],
+          'is_verified': true, // Assume true for listed doctors
+        };
+        
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (context) => _buildDoctorBottomSheet(fallbackData, ''),
+        );
+      }
     } catch (e) {
       debugPrint("Error fetching doctor details: $e");
+       // Fallback on error too
+       if (!mounted) return;
+        final fallbackData = {
+          'id': doctor['id'],
+          'name': doctor['name'],
+          'profile_image': doctor['image'],
+          'specialty': doctor['specialty'],
+          'clinic': doctor['clinic'],
+          'rating': doctor['rating'],
+          'reviews_count': doctor['reviews_count'],
+           'is_verified': true,
+        };
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (context) => _buildDoctorBottomSheet(fallbackData, ''),
+        );
     }
   }
 
@@ -154,22 +233,11 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
                   gradient: AppGradients.primaryCta,
                   shape: BoxShape.circle,
                 ),
-                child: CircleAvatar(
+                child: CachedAvatar(
+                  imageUrl: data['profile_image'],
+                  name: data['name'] ?? 'D',
                   radius: 50,
                   backgroundColor: AppColors.white,
-                  backgroundImage: data['profile_image']?.isNotEmpty == true
-                      ? NetworkImage(data['profile_image'])
-                      : null,
-                  child: data['profile_image']?.isEmpty != false
-                      ? Text(
-                          (data['name'] ?? 'D').substring(0, 1).toUpperCase(),
-                          style: TextStyle(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 32,
-                          ),
-                        )
-                      : null,
                 ),
               ),
               // Verified badge
@@ -759,25 +827,11 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
                     gradient: AppGradients.primaryCta,
                     shape: BoxShape.circle,
                   ),
-                  child: CircleAvatar(
+                  child: CachedAvatar(
+                    imageUrl: doctor['image'],
+                    name: doctor['firstName'] ?? '?',
                     radius: 32,
                     backgroundColor: AppColors.white,
-                    backgroundImage: doctor['image']?.isNotEmpty == true
-                        ? NetworkImage(doctor['image'])
-                        : null,
-                    child: doctor['image']?.isNotEmpty != true
-                        ? Text(
-                            (doctor['firstName'][0] ?? '') +
-                                (doctor['lastName']?.isNotEmpty == true
-                                    ? doctor['lastName'][0]
-                                    : ''),
-                            style: TextStyle(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                            ),
-                          )
-                        : null,
                   ),
                 ),
                 const SizedBox(width: AppSpacing.lg),

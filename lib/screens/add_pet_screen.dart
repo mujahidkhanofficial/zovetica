@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:zovetica/services/pet_service.dart';
+import 'package:zovetica/data/repositories/pet_repository.dart';
 import 'package:zovetica/services/storage_service.dart';
 import '../models/app_models.dart';
 import '../theme/app_colors.dart';
@@ -109,24 +110,29 @@ class _AddPetScreenState extends State<AddPetScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_imageFile == null) {
-        // Optional: Require photo or use default? Let's allow no photo but confirm
-    }
 
     setState(() => _isLoading = true);
     try {
-      // 1. Upload Image if exists
+      // 1. Upload Image (Offline? If fail, continue with null image or local path if we had that infrastructure, 
+      // but for now we assume online for image upload or it fails gracefully and user tries later, 
+      // OR we just save text data offline)
       String? imageUrl;
       if (_imageFile != null) {
-        // Generate a random ID for the pet temporarily or use timestamp
-        final petId = DateTime.now().millisecondsSinceEpoch.toString(); 
-        imageUrl = await _storageService.uploadPetImage(_imageFile!, petId);
+         try {
+           // Basic check: Are we online? If not, we can't upload image.
+           // Ideally we upload to local cache, but StorageService is simple.
+           // For now, if upload fails, we skip image upload but save pet data.
+           final petId = DateTime.now().millisecondsSinceEpoch.toString(); 
+           imageUrl = await _storageService.uploadPetImage(_imageFile!, petId);
+         } catch (e) {
+           debugPrint('Image upload failed (likely offline): $e');
+           // Proceed without image url for now
+         }
       }
 
-      // 2. Add Pet to DB
-      // 2. Add or Update Pet
+      // 2. Add or Update Pet via Repository (handles offline)
       if (widget.petToEdit != null) {
-        await _petService.updatePet(
+        await PetRepository.instance.updatePet(
           petId: widget.petToEdit!.id,
           name: _nameController.text.trim(),
           type: _selectedType,
@@ -135,11 +141,11 @@ class _AddPetScreenState extends State<AddPetScreen> {
           age: _ageController.text.trim(),
           weight: _weightController.text.trim(),
           height: _heightController.text.trim(),
-          imageUrl: imageUrl, // Only updates if new image uploaded
+          imageUrl: imageUrl, 
           emoji: _getEmojiForType(_selectedType),
         );
       } else {
-        await _petService.addPet(
+        await PetRepository.instance.addPet(
           name: _nameController.text.trim(),
           type: _selectedType,
           breed: _breedController.text.trim(),
@@ -148,17 +154,17 @@ class _AddPetScreenState extends State<AddPetScreen> {
           weight: _weightController.text.trim(),
           height: _heightController.text.trim(),
           imageUrl: imageUrl,
-          health: 'Good', // Default
+          health: 'Good', 
           emoji: _getEmojiForType(_selectedType),
         );
       }
 
       if (!mounted) return;
       AppNotifications.showSuccess(context, widget.petToEdit != null ? 'Pet updated successfully!' : 'Pet added successfully!');
-      Navigator.pop(context, true); // Return true to trigger refresh
+      Navigator.pop(context, true); 
     } catch (e) {
-      debugPrint('Error adding pet: $e');
-      if (mounted) AppNotifications.showError(context, 'Failed to add pet: $e');
+      debugPrint('Error saving pet: $e');
+      if (mounted) AppNotifications.showError(context, 'Failed to save pet');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

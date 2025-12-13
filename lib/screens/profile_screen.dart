@@ -25,6 +25,11 @@ import 'chat_screen.dart';
 import '../widgets/post_card.dart';
 import '../widgets/comments_sheet.dart';
 import '../widgets/confirmation_dialog.dart';
+import '../widgets/offline_banner.dart';
+import '../widgets/widgets.dart';
+import '../data/repositories/pet_repository.dart';
+import '../data/repositories/post_repository.dart';
+import '../data/repositories/user_repository.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String? userId; // Optional: If null, show current user
@@ -46,6 +51,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final ChatService _chatService = ChatService();
   final AppointmentService _appointmentService = AppointmentService();
   final ReviewService _reviewService = ReviewService();
+  final PetRepository _petRepo = PetRepository.instance;
+  final PostRepository _postRepo = PostRepository.instance;
+  final UserRepository _userRepo = UserRepository.instance;
   
   Map<String, dynamic> _userInfo = {};
   List<Pet> _pets = [];
@@ -104,22 +112,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _isCurrentUser = (widget.userId == null || widget.userId == currentUserId);
 
       if (targetUserId != null) {
-        final userData = await _userService.getUserById(targetUserId);
+        // Use repository for local-first data
+        final user = await _userRepo.getUser(targetUserId);
 
-        if (userData != null) {
+        if (user != null) {
           setState(() {
             _userInfo = {
-              'id': userData['id'], // Store ID
-              'name': userData['name'] ?? 'No Name',
-              'email': userData['email'] ?? '',
-              'phone': userData['phone'] ?? '',
-              'joinDate': userData['created_at'] ?? '',
-              'imageUrl': userData['profile_image'] ?? '',
-              'favorites': userData['favorites'] ?? [],
-              'role': userData['role'] ?? 'petOwner',
-              'username': userData['username'],
-              'rating': userData['rating'], // Add real rating lookup
+              'id': user.id,
+              'name': user.name ?? 'No Name',
+              'email': user.email,
+              'phone': user.phone ?? '',
+              'joinDate': user.createdAt.toIso8601String(),
+              'imageUrl': user.profileImage ?? '',
+              'favorites': [], // Not cached locally yet
+              'role': user.role,
+              'username': user.username,
+              'rating': user.rating,
+              'specialty': user.specialty,
+              'clinic': user.clinic,
+               // If we have synced data but want to try fetching fresh favorites/extras:
             };
+            
             if (_isCurrentUser) {
               _nameController.text = _userInfo['name'] ?? '';
               _emailController.text = _userInfo['email'] ?? '';
@@ -231,12 +244,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
   Future<void> _fetchPets() async {
     try {
-      final targetUserId = widget.userId ?? _authService.currentUser?.id;
+      final currentUserId = _authService.currentUser?.id;
+      final targetUserId = widget.userId ?? currentUserId;
+      
       if (targetUserId != null) {
-        final pets = await _petService.getPetsByUserId(targetUserId);
-        setState(() {
-          _pets = pets;
-        });
+        // 1. Local first
+        final localPets = await _petRepo.getPetsByUserId(targetUserId);
+        if (localPets.isNotEmpty) {
+          setState(() {
+            _pets = localPets.map(_petRepo.localPetToPet).toList();
+          });
+        }
+        
+        // 2. Sync
+        await _petRepo.syncPetsForUser(targetUserId);
+
+        // 3. Update UI
+        final updatedPets = await _petRepo.getPetsByUserId(targetUserId);
+        if (mounted) {
+          setState(() {
+             _pets = updatedPets.map(_petRepo.localPetToPet).toList();
+          });
+        }
       }
     } catch (e) {
       debugPrint('Error fetching pets: $e');
@@ -247,10 +276,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final targetUserId = widget.userId ?? _authService.currentUser?.id;
       if (targetUserId != null) {
-        final posts = await _postService.fetchPostsByUserId(targetUserId);
-        setState(() {
-          _userPosts = posts;
-        });
+        // 1. Local first
+        final localPosts = await _postRepo.getPostsByUserId(targetUserId);
+        if (localPosts.isNotEmpty) {
+           setState(() {
+            _userPosts = localPosts.map(_postRepo.localPostToPost).toList();
+          });
+        }
+        
+        // 2. Sync (internally updates DB)
+        // Note: getPostsByUserId logic I wrote triggered sync if not loaded. 
+        // But to be sure we get fresh data updates:
+        await _postRepo.syncPostsByUserId(targetUserId);
+
+        // 3. Refresh from properties
+        final updatedPosts = await _postRepo.getPostsByUserId(targetUserId);
+        if (mounted) {
+          setState(() {
+            _userPosts = updatedPosts.map(_postRepo.localPostToPost).toList();
+          });
+        }
       }
     } catch (e) {
       debugPrint('Error fetching user posts: $e');
@@ -441,18 +486,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final user = _authService.currentUser;
       if (user != null) {
-          await _userService.updateUser(
-            userId: user.id,
-            profileImage: null, // or empty string depending on DB
+          final success = await _userRepo.updateProfile(
+             profileImage: null,
           );
           
-          if (!mounted) return;
-          setState(() {
-            _profileImage = null;
-            _userInfo['imageUrl'] = '';
-          });
-          
-          AppNotifications.showSuccess(context, 'Profile photo removed');
+          if (success) {
+            if (!mounted) return;
+            setState(() {
+              _profileImage = null;
+              _userInfo['imageUrl'] = '';
+            });
+            
+            AppNotifications.showSuccess(context, 'Profile photo removed');
+          }
       }
     } catch (e) {
         debugPrint("Error removing photo: $e");
@@ -471,17 +517,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final imageUrl = await uploadImageToStorage(_profileImage!, folder: 'profile_images/${user.id}');
         
         if (imageUrl != null) {
-             await _userService.updateUser(
-                userId: user.id,
+             final success = await _userRepo.updateProfile(
                 profileImage: imageUrl,
              );
              
-             setState(() {
-                 _userInfo['imageUrl'] = imageUrl;
-             });
-
-             if (!mounted) return;
-             AppNotifications.showSuccess(context, 'Profile photo updated');
+             if (success) {
+               setState(() {
+                   _userInfo['imageUrl'] = imageUrl;
+               });
+  
+               if (mounted) {
+                 AppNotifications.showSuccess(context, 'Profile photo updated');
+               }
+             } else {
+               if (mounted) {
+                 AppNotifications.showError(context, 'Failed to update profile');
+               }
+             }
         }
       }
     } catch (e) {
@@ -539,12 +591,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: Stack(
+      body: OfflineAwareBody(
+        child: Stack(
         children: [
-          RefreshIndicator(
+          AppRefreshIndicator(
             onRefresh: _handleRefresh,
-            color: AppColors.primary,
-            backgroundColor: Colors.white,
             child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
               slivers: [
@@ -600,6 +651,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
         ],
+        ),
       ),
     );
   }
@@ -654,66 +706,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 // Avatar with gradient ring
                 GestureDetector(
                 onTap: _isCurrentUser ? _showProfilePhotoOptions : null,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withAlpha(15),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white,
-                      ),
-                      child: Stack(
-                        children: [
-                          CircleAvatar(
-                            radius: 52,
-                            backgroundImage: imageProvider,
-                            backgroundColor: AppColors.cloud,
-                            child: imageProvider == null
-                                ? Text(
-                                    (_userInfo['name'] ?? 'U').toString()[0].toUpperCase(),
-                                    style: TextStyle(
-                                        fontSize: 42,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppColors.primary),
-                                  )
-                                : null,
-                          ),
-                          if (_isCurrentUser)
-                            Positioned(
-                              right: 2,
-                              bottom: 2,
-                              child: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  gradient: AppGradients.primaryCta,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white, width: 3),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: AppColors.primary.withAlpha(50),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                                child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 16),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
+                child: CachedProfileAvatar(
+                  imageUrl: _userInfo['imageUrl']?.toString(),
+                  name: _userInfo['name'] ?? 'U',
+                  size: 104, // 52 radius * 2
+                ),
                 ),
                 const SizedBox(height: 12),
                 
@@ -1041,19 +1038,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   gradient: AppGradients.primaryCta,
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: Container(
-                  width: 70,
-                  height: 70,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(13),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(13),
+                  child: Container(
+                    width: 70,
+                    height: 70,
                     color: AppColors.cloud,
-                    image: imageUrl.isNotEmpty 
-                        ? DecorationImage(image: NetworkImage(imageUrl), fit: BoxFit.cover) 
-                        : null,
+                    child: imageUrl.isNotEmpty
+                        ? CachedImage(
+                            imageUrl: imageUrl,
+                            width: 70,
+                            height: 70,
+                            fit: BoxFit.cover,
+                          )
+                        : Center(child: Text(pet.emoji, style: const TextStyle(fontSize: 32))),
                   ),
-                  child: imageUrl.isEmpty 
-                      ? Center(child: Text(pet.emoji, style: const TextStyle(fontSize: 32))) 
-                      : null,
                 ),
               ),
               const SizedBox(width: 16),
@@ -1160,7 +1159,7 @@ Widget _buildPetTag(String label, Color color) {
     final oldIsLiked = post.isLiked;
     final oldLikesCount = post.likesCount;
 
-    // Optimistic Update
+    // Optimistic Update (UI)
     setState(() {
       final index = _userPosts.indexWhere((p) => p.id == post.id);
       if (index != -1) {
@@ -1171,19 +1170,8 @@ Widget _buildPetTag(String label, Color color) {
       }
     });
 
-    final success = await _postService.toggleLike(post.id);
-    if (!success) {
-      // Revert if failed
-      setState(() {
-        final index = _userPosts.indexWhere((p) => p.id == post.id);
-        if (index != -1) {
-          _userPosts[index] = post.copyWith(
-            isLiked: oldIsLiked,
-            likesCount: oldLikesCount,
-          );
-        }
-      });
-    }
+    // Offline-first Repo Update
+    await _postRepo.toggleLike(post.id, oldIsLiked, oldLikesCount);
   }
 
   void _showCommentsSheet(Post post) {

@@ -19,6 +19,7 @@ class PetInput extends StatelessWidget {
   final FocusNode? focusNode;
   final TextInputAction? textInputAction;
   final void Function(String)? onSubmitted;
+  final bool autoFocus;
 
   const PetInput({
     super.key,
@@ -37,11 +38,13 @@ class PetInput extends StatelessWidget {
     this.focusNode,
     this.textInputAction,
     this.onSubmitted,
+    this.autoFocus = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return TextFormField(
+      autofocus: autoFocus,
       controller: controller,
       obscureText: obscureText,
       keyboardType: keyboardType,

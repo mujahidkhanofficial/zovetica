@@ -9,6 +9,7 @@ class Doctor {
   final String clinic;
   final String image;
   final bool available;
+  final String? userId;
 
   Doctor({
     required this.id,
@@ -21,5 +22,6 @@ class Doctor {
     required this.clinic,
     required this.image,
     required this.available,
+    this.userId,
   });
 }

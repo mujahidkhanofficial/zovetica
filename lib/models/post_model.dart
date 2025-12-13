@@ -30,11 +30,11 @@ class Post {
       id: map['id'],
       author: User(
         id: map['user_id']?.toString() ?? '', 
-        name: map['author_name'] ?? 'Unknown User',
+        name: (map['users'] != null ? map['users']['name'] : null) ?? map['author_name'] ?? 'Unknown User',
         email: '',
         phone: '',
         role: UserRole.petOwner,
-        profileImage: map['author_image'] ?? '',
+        profileImage: (map['users'] != null ? map['users']['profile_image'] : null) ?? map['author_image'] ?? '',
       ),
       content: map['content'] ?? '',
       imageUrl: map['image_url'],
@@ -47,13 +47,14 @@ class Post {
   }
 
   Post copyWith({
+    User? author,
     int? likesCount,
     int? commentsCount,
     bool? isLiked,
   }) {
     return Post(
       id: id,
-      author: author,
+      author: author ?? this.author,
       content: content,
       imageUrl: imageUrl,
       localImagePath: localImagePath,

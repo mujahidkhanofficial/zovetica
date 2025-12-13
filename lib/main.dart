@@ -4,6 +4,8 @@ import 'package:zovetica/screens/auth_screen.dart';
 import 'package:zovetica/screens/main_screen.dart';
 import 'package:zovetica/services/auth_service.dart';
 import 'package:zovetica/services/supabase_service.dart';
+import 'package:zovetica/core/network/connectivity_service.dart';
+import 'package:zovetica/core/sync/sync_engine.dart';
 import 'screens/splash_screen.dart';
 import 'theme/app_theme.dart';
 
@@ -20,8 +22,13 @@ void main() async {
     anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '',
   );
 
+  // Initialize offline-first infrastructure
+  await ConnectivityService.instance.initialize();
+  await SyncEngine.instance.initialize();
+
   runApp(const ZoveticaApp());
 }
+
 
 class ZoveticaApp extends StatelessWidget {
   final AuthService? authService;

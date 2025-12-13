@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../services/simple_chat_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'; // For Realtime
+import 'package:drift/drift.dart' show Value; // For DB insert
+import '../data/local/database.dart'; // AppDatabase, LocalMessagesCompanion
+import '../data/repositories/chat_repository.dart';
+import '../data/repositories/chat_repository_impl.dart';
+import '../core/sync/sync_engine.dart';
 import '../services/supabase_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_gradients.dart';
 import '../theme/app_spacing.dart';
+import '../widgets/offline_banner.dart';
+import '../widgets/cached_avatar.dart';
 
 class SimpleChatScreen extends StatefulWidget {
   final int chatId;
@@ -25,23 +32,106 @@ class SimpleChatScreen extends StatefulWidget {
 }
 
 class _SimpleChatScreenState extends State<SimpleChatScreen> {
-  final _chatService = SimpleChatService();
+  final ChatRepository _chatRepo = ChatRepositoryImpl();
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
   String? _currentUserId;
+  
+  // Realtime subscription for instant message updates
+  RealtimeChannel? _messagesSubscription;
 
   @override
   void initState() {
     super.initState();
     _currentUserId = SupabaseService.currentUser?.id;
+    // Trigger background sync for this chat
+    SyncEngine.instance.syncChat(widget.chatId);
+    // Setup realtime subscription for instant updates
+    _setupRealtimeSubscription();
   }
 
   @override
   void dispose() {
+    // Clean up realtime subscription
+    if (_messagesSubscription != null) {
+      SupabaseService.client.removeChannel(_messagesSubscription!);
+    }
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
+
+  /// Setup Supabase Realtime subscription for this chat's messages
+  void _setupRealtimeSubscription() {
+    debugPrint('🔌 Setting up Realtime for Chat: ${widget.chatId}');
+
+    _messagesSubscription = SupabaseService.client
+        .channel('public:messages:chat:${widget.chatId}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert, // Listen for new messages
+          schema: 'public',
+          table: 'messages',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'chat_id',
+            value: widget.chatId,
+          ),
+          callback: (payload) {
+            debugPrint('🔴 REALTIME: New message received!');
+            final newRecord = payload.newRecord;
+            
+            if (newRecord != null) {
+              final senderId = newRecord['sender_id'] as String?;
+              
+              // Only insert if message is from the other person (not me)
+              if (senderId != null && senderId != _currentUserId) {
+                debugPrint('✅ Message from friend - inserting directly...');
+                
+                // Direct insert into local DB (bypasses delta sync issue)
+                _insertRemoteMessage(newRecord);
+              }
+            }
+          },
+        )
+        .subscribe((status, [error]) {
+          if (status == RealtimeSubscribeStatus.subscribed) {
+            debugPrint('✅ Chat Realtime Connected!');
+          } else if (status == RealtimeSubscribeStatus.closed || 
+                     status == RealtimeSubscribeStatus.timedOut) {
+            debugPrint('❌ Chat Realtime Disconnected: $error');
+          }
+        });
+  }
+
+  /// Insert a message received from realtime directly into local DB
+  Future<void> _insertRemoteMessage(Map<String, dynamic> msgData) async {
+    try {
+      final db = AppDatabase.instance;
+      
+      await db.into(db.localMessages).insertOnConflictUpdate(
+        LocalMessagesCompanion(
+          remoteId: Value(msgData['id'] as int),
+          chatId: Value(widget.chatId),
+          senderId: Value(msgData['sender_id'] as String),
+          content: Value(msgData['content'] as String),
+          createdAt: Value(DateTime.parse(msgData['created_at'] as String)),
+          editedAt: Value(msgData['edited_at'] != null 
+              ? DateTime.parse(msgData['edited_at'] as String) 
+              : null),
+          syncStatus: const Value('synced'),
+          syncedAt: Value(DateTime.now()),
+          isDeleted: const Value(false),
+        ),
+      );
+      
+      debugPrint('✅ Message inserted directly into local DB!');
+    } catch (e) {
+      debugPrint('❌ Failed to insert realtime message: $e');
+      // Fallback to sync
+      SyncEngine.instance.syncChat(widget.chatId);
+    }
+  }
+
 
   void _scrollToBottom() {
     if (_scrollController.hasClients) {
@@ -81,18 +171,12 @@ class _SimpleChatScreenState extends State<SimpleChatScreen> {
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.white.withOpacity(0.3), width: 2),
               ),
-              child: CircleAvatar(
+              // Use CachedAvatar for offline image caching
+              child: CachedAvatar(
+                imageUrl: widget.friendImage,
+                name: widget.friendName,
                 radius: 18,
                 backgroundColor: Colors.white,
-                backgroundImage: widget.friendImage != null && widget.friendImage!.isNotEmpty
-                    ? NetworkImage(widget.friendImage!)
-                    : null,
-                child: widget.friendImage == null || widget.friendImage!.isEmpty
-                    ? Text(
-                        widget.friendName.isNotEmpty ? widget.friendName[0].toUpperCase() : '?',
-                        style: const TextStyle(fontSize: 16, color: AppColors.primary),
-                      )
-                    : null,
               ),
             ),
             const SizedBox(width: 12),
@@ -110,13 +194,6 @@ class _SimpleChatScreenState extends State<SimpleChatScreen> {
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
-                  Text(
-                    'online',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.white.withOpacity(0.8),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -124,74 +201,70 @@ class _SimpleChatScreenState extends State<SimpleChatScreen> {
         ),
         actions: const [],
       ),
-      body: Column(
-        children: [
-          // Messages List
-          Expanded(
-            child: StreamBuilder<List<Map<String, dynamic>>>(
-              stream: _chatService.getMessagesStream(widget.chatId),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return _buildLoadingState();
-                }
+      body: OfflineAwareBody(
+        child: Column(
+          children: [
+            // Messages List - Now using local-first repository
+            Expanded(
+              child: StreamBuilder<List<MessageData>>(
+                stream: _chatRepo.watchMessages(widget.chatId),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting &&
+                      !snapshot.hasData) {
+                    return _buildLoadingState();
+                  }
 
-                if (snapshot.hasError) {
-                  return _buildErrorState();
-                }
+                  if (snapshot.hasError) {
+                    return _buildErrorState();
+                  }
 
-                final messages = snapshot.data ?? [];
+                  final messages = snapshot.data ?? [];
 
-                if (messages.isEmpty) {
-                  return _buildEmptyState();
-                }
+                  if (messages.isEmpty) {
+                    return _buildEmptyState();
+                  }
 
-                // Scroll to bottom when new messages arrive
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  _scrollToBottom();
-                });
+                  // Scroll to bottom when new messages arrive
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    _scrollToBottom();
+                  });
 
-                return ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  itemCount: messages.length,
-                  itemBuilder: (context, index) {
-                    final message = messages[index];
-                    final isMe = message['sender_id'] == _currentUserId;
-                    final prevMessage = index > 0 ? messages[index - 1] : null;
-                    final showTimestamp = _shouldShowTimestamp(prevMessage, message);
+                  return ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    itemCount: messages.length,
+                    itemBuilder: (context, index) {
+                      final message = messages[index];
+                      final isMe = message.senderId == _currentUserId;
+                      final prevMessage = index > 0 ? messages[index - 1] : null;
+                      final showTimestamp = _shouldShowTimestamp(prevMessage, message);
 
-                    return Column(
-                      children: [
-                        if (showTimestamp) _buildTimestamp(message['created_at']),
-                        _buildMessageBubble(message, isMe),
-                      ],
-                    );
-                  },
-                );
-              },
+                      return Column(
+                        children: [
+                          if (showTimestamp) _buildTimestamp(message.createdAt),
+                          _buildMessageBubble(message, isMe),
+                        ],
+                      );
+                    },
+                  );
+                },
+              ),
             ),
-          ),
 
-          // Input Bar
-          _buildInputBar(),
-        ],
+            // Input Bar
+            _buildInputBar(),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildMessageBubble(Map<String, dynamic> message, bool isMe) {
-    final content = message['content'] as String? ?? '';
-    final createdAt = message['created_at'] as String?;
+  Widget _buildMessageBubble(MessageData message, bool isMe) {
+    final content = message.content;
+    final timeStr = DateFormat('h:mm a').format(message.createdAt);
     
-    String timeStr = '';
-    if (createdAt != null) {
-      try {
-        final time = DateTime.parse(createdAt);
-        timeStr = DateFormat('h:mm a').format(time); // 12-hour format with AM/PM
-      } catch (e) {
-        timeStr = '';
-      }
-    }
+    // Show sync status indicator for pending messages
+    final isPending = message.isPending;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -239,12 +312,33 @@ class _SimpleChatScreenState extends State<SimpleChatScreen> {
                     ),
                   ),
                   const SizedBox(width: 6),
-                  Text(
-                    timeStr,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: isMe ? Colors.white.withOpacity(0.7) : AppColors.slate.withOpacity(0.6),
-                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        timeStr,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isMe ? Colors.white.withOpacity(0.7) : AppColors.slate.withOpacity(0.6),
+                        ),
+                      ),
+                      // Show clock icon for pending messages
+                      if (isMe && isPending) ...[
+                        const SizedBox(width: 4),
+                        Icon(
+                          Icons.access_time,
+                          size: 12,
+                          color: Colors.white.withOpacity(0.7),
+                        ),
+                      ] else if (isMe) ...[
+                        const SizedBox(width: 4),
+                        Icon(
+                          Icons.done_all,
+                          size: 14,
+                          color: Colors.white.withOpacity(0.9),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),
@@ -256,59 +350,45 @@ class _SimpleChatScreenState extends State<SimpleChatScreen> {
     );
   }
 
-  Widget _buildTimestamp(String? dateStr) {
-    if (dateStr == null) return const SizedBox.shrink();
+  Widget _buildTimestamp(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final messageDate = DateTime(date.year, date.month, date.day);
     
-    try {
-      final date = DateTime.parse(dateStr);
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
-      final messageDate = DateTime(date.year, date.month, date.day);
-      
-      String label;
-      if (messageDate == today) {
-        label = 'Today';
-      } else if (messageDate == today.subtract(const Duration(days: 1))) {
-        label = 'Yesterday';
-      } else {
-        label = DateFormat('MMM d').format(date);
-      }
-      
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: AppColors.slate.withOpacity(0.15),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: AppColors.slate.withOpacity(0.7),
-            ),
+    String label;
+    if (messageDate == today) {
+      label = 'Today';
+    } else if (messageDate == today.subtract(const Duration(days: 1))) {
+      label = 'Yesterday';
+    } else {
+      label = DateFormat('MMM d').format(date);
+    }
+    
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppColors.slate.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: AppColors.slate.withOpacity(0.7),
           ),
         ),
-      );
-    } catch (e) {
-      return const SizedBox.shrink();
-    }
+      ),
+    );
   }
 
-  bool _shouldShowTimestamp(Map<String, dynamic>? prevMessage, Map<String, dynamic> currentMessage) {
+  bool _shouldShowTimestamp(MessageData? prevMessage, MessageData currentMessage) {
     if (prevMessage == null) return true;
     
-    try {
-      final prevDate = DateTime.parse(prevMessage['created_at']);
-      final currentDate = DateTime.parse(currentMessage['created_at']);
-      
-      // Show timestamp if more than 1 hour apart
-      return currentDate.difference(prevDate).inMinutes > 60;
-    } catch (e) {
-      return false;
-    }
+    // Show timestamp if more than 1 hour apart
+    return currentMessage.createdAt.difference(prevMessage.createdAt).inMinutes > 60;
   }
 
   Widget _buildInputBar() {
@@ -482,10 +562,11 @@ class _SimpleChatScreenState extends State<SimpleChatScreen> {
     });
 
     try {
-      await _chatService.sendMessage(
-        widget.chatId,
-        content,
-        widget.friendId,
+      // Now uses repository for local-first optimistic write
+      await _chatRepo.sendMessage(
+        chatId: widget.chatId,
+        content: content,
+        recipientId: widget.friendId,
       );
       
       _scrollToBottom();

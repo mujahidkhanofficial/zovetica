@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:timeago/timeago.dart' as timeago;
-import '../services/simple_chat_service.dart';
+import '../data/repositories/chat_repository.dart';
+import '../data/repositories/chat_repository_impl.dart';
+import '../core/sync/sync_engine.dart';
 import '../services/friend_service.dart';
+import '../services/simple_chat_service.dart';  // Keep for createOrGetChatWithFriend
 import '../theme/app_colors.dart';
 import '../theme/app_gradients.dart';
 import '../theme/app_spacing.dart';
+import '../widgets/offline_banner.dart';
+import '../widgets/cached_avatar.dart';
+import '../widgets/widgets.dart'; // For AppRefreshIndicator
 import 'simple_chat_screen.dart';
 
 class SimpleChatListScreen extends StatefulWidget {
@@ -15,8 +21,16 @@ class SimpleChatListScreen extends StatefulWidget {
 }
 
 class _SimpleChatListScreenState extends State<SimpleChatListScreen> {
-  final _chatService = SimpleChatService();
+  final ChatRepository _chatRepo = ChatRepositoryImpl();
   final _friendService = FriendService();
+  final _chatService = SimpleChatService();  // Keep for createOrGetChatWithFriend
+
+  @override
+  void initState() {
+    super.initState();
+    // Trigger background sync when chat list opens
+    SyncEngine.instance.forceFullSync();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,11 +53,37 @@ class _SimpleChatListScreenState extends State<SimpleChatListScreen> {
             gradient: AppGradients.primaryDiagonal,
           ),
         ),
+        actions: [
+          // Sync indicator - uses reactive stream
+          StreamBuilder<bool>(
+            stream: SyncEngine.instance.syncStatusStream,
+            initialData: SyncEngine.instance.isSyncing,
+            builder: (context, snapshot) {
+              if (snapshot.data == true) {
+                return const Padding(
+                  padding: EdgeInsets.only(right: 16),
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation(Colors.white70),
+                    ),
+                  ),
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
+        ],
       ),
-      body: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: _chatService.getMyChatsStream(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+      body: OfflineAwareBody(
+        child: StreamBuilder<List<ChatData>>(
+          stream: _chatRepo.watchChats(),
+          builder: (context, snapshot) {
+          // Show cached data even while loading new data
+          if (snapshot.connectionState == ConnectionState.waiting && 
+              !snapshot.hasData) {
             return _buildLoadingState();
           }
 
@@ -57,18 +97,24 @@ class _SimpleChatListScreenState extends State<SimpleChatListScreen> {
             return _buildEmptyState();
           }
 
-          return ListView.separated(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            itemCount: chats.length,
-            separatorBuilder: (context, index) => 
-                const SizedBox(height: AppSpacing.sm),
-            itemBuilder: (context, index) {
-              final chat = chats[index];
-              return _buildChatCard(chat);
+          return AppRefreshIndicator(
+            onRefresh: () async {
+              await SyncEngine.instance.forceFullSync();
             },
+            child: ListView.separated(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              itemCount: chats.length,
+              separatorBuilder: (context, index) => 
+                  const SizedBox(height: AppSpacing.sm),
+              itemBuilder: (context, index) {
+                final chat = chats[index];
+                return _buildChatCard(chat);
+              },
+            ),
           );
         },
       ),
+    ),
       // Beautiful Floating Action Button
       floatingActionButton: Container(
         decoration: BoxDecoration(
@@ -111,31 +157,19 @@ class _SimpleChatListScreenState extends State<SimpleChatListScreen> {
     );
   }
 
-  Widget _buildChatCard(Map<String, dynamic> chat) {
-    final friend = chat['friend'] as Map<String, dynamic>;
-    final lastMessage = chat['last_message'] as Map<String, dynamic>?;
-    final profileImage = friend['profile_image'] as String?;
-    final friendName = friend['name'] as String? ?? 'Unknown';
-    final friendId = friend['id'] as String;
+  Widget _buildChatCard(ChatData chat) {
+    final profileImage = chat.otherUserImage;
+    final friendName = chat.otherUserName ?? 'Unknown';
+    final friendId = chat.otherUserId ?? '';
 
-    String preview = 'No messages yet';
+    String preview = chat.lastMessage ?? 'No messages yet';
+    if (preview.length > 50) {
+      preview = '${preview.substring(0, 47)}...';
+    }
+
     String timeAgo = '';
-
-    if (lastMessage != null) {
-      preview = lastMessage['content'] as String? ?? '';
-      if (preview.length > 50) {
-        preview = '${preview.substring(0, 47)}...';
-      }
-
-      final createdAt = lastMessage['created_at'] as String?;
-      if (createdAt != null) {
-        try {
-          final time = DateTime.parse(createdAt);
-          timeAgo = timeago.format(time, locale: 'en_short');
-        } catch (e) {
-          timeAgo = '';
-        }
-      }
+    if (chat.lastMessageAt != null) {
+      timeAgo = timeago.format(chat.lastMessageAt!, locale: 'en_short');
     }
 
     return InkWell(
@@ -144,7 +178,7 @@ class _SimpleChatListScreenState extends State<SimpleChatListScreen> {
           context,
           MaterialPageRoute(
             builder: (context) => SimpleChatScreen(
-              chatId: chat['id'] as int,
+              chatId: chat.id,
               friendId: friendId,
               friendName: friendName,
               friendImage: profileImage,
@@ -172,23 +206,11 @@ class _SimpleChatListScreenState extends State<SimpleChatListScreen> {
         padding: const EdgeInsets.all(AppSpacing.md),
         child: Row(
           children: [
-            // Avatar
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: AppGradients.primaryCta,
-              ),
-              child: profileImage != null && profileImage.isNotEmpty
-                  ? ClipOval(
-                      child: Image.network(
-                        profileImage,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _buildDefaultAvatar(friendName),
-                      ),
-                    )
-                  : _buildDefaultAvatar(friendName),
+            // Avatar - Uses CachedAvatar for offline caching
+            CachedAvatar(
+              imageUrl: profileImage,
+              name: friendName,
+              radius: 28,
             ),
             const SizedBox(width: AppSpacing.md),
             

@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_shadows.dart';
+import 'cached_avatar.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_spacing.dart';
+import '../theme/app_shadows.dart';
 
 /// Rounded card with soft shadow
 class PetCard extends StatelessWidget {
@@ -120,21 +124,12 @@ class VetCard extends StatelessWidget {
         children: [
           // Avatar
           Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              color: AppColors.primaryLight.withAlpha(51),
-              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-              image: imageUrl != null
-                  ? DecorationImage(
-                      image: NetworkImage(imageUrl!),
-                      fit: BoxFit.cover,
-                    )
-                  : null,
+            child: CachedAvatar(
+              name: name,
+              imageUrl: imageUrl,
+              radius: 30, // 60 width / 2
+              backgroundColor: AppColors.primaryLight.withAlpha(51),
             ),
-            child: imageUrl == null
-                ? Icon(Icons.person, color: AppColors.primary, size: 32)
-                : null,
           ),
           const SizedBox(width: AppSpacing.lg),
           // Info

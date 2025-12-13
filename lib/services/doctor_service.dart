@@ -10,30 +10,33 @@ class DoctorService {
   /// Get all verified doctors
   Future<List<Doctor>> getDoctors() async {
     try {
+      // Fetch from 'doctors' table and join 'users' to get profile info
       final response = await _client
-          .from(_tableName)
-          .select()
-          .eq('role', 'doctor');
+          .from('doctors')
+          .select('*, users!inner(*)') // Inner join to ensure user exists
+          .order('id');
 
-      return (response as List).map((data) => _mapUserToDoctor(data)).toList();
+      return (response as List).map((data) => _mapJoinedDataToDoctor(data)).toList();
     } catch (e) {
       debugPrint('Error fetching doctors: $e');
       return [];
     }
   }
 
-  Doctor _mapUserToDoctor(Map<String, dynamic> data) {
+  Doctor _mapJoinedDataToDoctor(Map<String, dynamic> data) {
+    final userData = data['users'] as Map<String, dynamic>? ?? {};
+    
     return Doctor(
-      id: data['id'] ?? '',
-      name: data['name'] ?? 'Unknown Doctor',
-      specialty: data['specialty'] ?? 'General Veterinarian',
-      rating: (data['rating'] is num) ? (data['rating'] as num).toDouble() : 0.0, // 0.0 = no rating
-      reviews: data['reviews_count'] ?? 0,
-       // Provide default if missing
-      nextAvailable: 'Available', 
-      clinic: data['clinic'] ?? 'Zovetica Clinic',
-      image: data['profile_image'] ?? '',
+      id: data['id']?.toString() ?? '', // This is the Doctor Table ID
+      name: userData['name'] ?? 'Unknown Doctor',
+      specialty: userData['specialty'] ?? data['specialty_override'] ?? 'General Veterinarian',
+      rating: (userData['rating'] is num) ? (userData['rating'] as num).toDouble() : 0.0,
+      reviews: userData['reviews_count'] ?? 0,
+      nextAvailable: 'Available',
+      clinic: userData['clinic'] ?? 'Zovetica Clinic',
+      image: userData['profile_image'] ?? '',
       available: true,
+      userId: data['user_id']?.toString(),
     );
   }
 }

@@ -12,7 +12,14 @@ import 'appointment_screen.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_shadows.dart'; 
 import '../widgets/enterprise_header.dart'; 
-import '../utils/app_notifications.dart'; // Required for AppNotifications
+import '../widgets/widgets.dart'; 
+import '../utils/app_notifications.dart';
+import '../widgets/custom_toast.dart';
+import '../services/notification_service.dart';
+import '../data/repositories/appointment_repository.dart';
+import '../data/repositories/user_repository.dart';
+import '../data/local/database.dart'; // LocalDoctorsCompanion
+import 'package:drift/drift.dart' show Value;
 
 class DoctorDashboardScreen extends StatefulWidget {
   const DoctorDashboardScreen({super.key});
@@ -23,12 +30,17 @@ class DoctorDashboardScreen extends StatefulWidget {
 
 class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
   final AuthService _authService = AuthService();
-  final UserService _userService = UserService();
-  final AppointmentService _appointmentService = AppointmentService();
+  // Repositories
+  final AppointmentRepository _appointmentRepo = AppointmentRepository.instance;
+  final UserRepository _userRepo = UserRepository.instance;
 
   String _firstName = "";
   String _profileImageUrl = "";
-  List<Appointment> _appointments = [];
+  Stream<List<LocalAppointment>>? _appointmentsStream; // Added Stream
+  List<Appointment> _appointments = []; // Keep as fallback/cache for stats? Or remove? 
+  // Let's keep _appointments populated by Stream listener or just rely on StreamBuilder for list.
+  // Ideally, use StreamBuilder. But for Stats (pending count), we need headers.
+  
   List<AvailabilitySlot> _slots = [];
 
   String? _doctorId;
@@ -37,7 +49,13 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
   @override
   void initState() {
     super.initState();
+    _initializeNotifications();
     _initializeDoctorProfile();
+  }
+
+  Future<void> _initializeNotifications() async {
+    await NotificationService().init();
+    await NotificationService().requestPermissions();
   }
 
   Future<void> _initializeDoctorProfile() async {
@@ -45,21 +63,85 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
     if (user == null) return;
 
     try {
-      // 1. Check if user is already a doctor
+      final localDoc = await _appointmentRepo.getDoctorByUserId(user.id);
+      
+      if (localDoc != null) {
+        _doctorId = localDoc.id;
+        _appointmentsStream = _appointmentRepo.watchDoctorAppointments(_doctorId!); // Init Stream immediately
+        
+        if (mounted) setState(() => _isLoading = false);
+        
+        await Future.wait([
+          _fetchDoctorInfo(),
+          _fetchAvailability(forceRefresh: false),
+        ]);
+        
+        _syncDoctorProfile(user.id);
+      } else {
+        await _syncDoctorProfile(user.id);
+        if (mounted) setState(() => _isLoading = false);
+        
+        if (_doctorId != null) {
+           _appointmentsStream = _appointmentRepo.watchDoctorAppointments(_doctorId!); // Init Stream
+          await Future.wait([
+            _fetchDoctorInfo(),
+            _fetchAvailability(),
+          ]);
+        }
+      }
+
+      _setupRealtimeSubscription();
+
+    } catch (e) {
+      debugPrint('Error initializing doctor profile: $e');
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _syncDoctorProfile(String userId) async {
+    try {
       final response = await SupabaseService.client
           .from('doctors')
-          .select('id, user_id')
-          .eq('user_id', user.id)
+          .select()
+          .eq('user_id', userId)
           .maybeSingle();
 
       if (response != null) {
-        _doctorId = response['id'];
+        final syncedId = response['id'];
+        
+        if (_doctorId != null && _doctorId != syncedId) {
+             debugPrint("⚠️ Doctor ID Mismatch Detected! Local: $_doctorId vs Remote: $syncedId");
+             await _appointmentRepo.deleteDoctor(_doctorId!);
+             
+             if (mounted) {
+               setState(() {
+                 _doctorId = syncedId;
+                 _appointmentsStream = _appointmentRepo.watchDoctorAppointments(_doctorId!);
+               });
+             }
+             Future.microtask(() => _appointmentRepo.syncDoctorAppointments(_doctorId!));
+        }
+
+        _doctorId = syncedId;
+        _appointmentsStream ??= _appointmentRepo.watchDoctorAppointments(_doctorId!);
+        
+        await _appointmentRepo.upsertDoctor(LocalDoctorsCompanion(
+           id: Value(response['id']),
+           userId: Value(userId),
+           name: Value(response['name'] ?? 'Doctor'),
+           specialty: Value(response['specialty']),
+           clinic: Value(response['clinic']),
+           available: Value(response['available'] ?? true),
+           verified: Value(response['verified'] ?? false),
+           createdAt: Value(DateTime.now()),
+           isSynced: const Value(true),
+        ));
       } else {
-        // 2. If not, auto-register as doctor for this session/demo
-        final newDoctor = await SupabaseService.client
+        // Auto-register logic (for new doctors)
+         final newDoctor = await SupabaseService.client
             .from('doctors')
             .insert({
-              'user_id': user.id,
+              'user_id': userId,
               'specialty': 'General Practitioner',
               'clinic': 'Zovetica Virtual Clinic',
               'available': true,
@@ -67,83 +149,106 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
             })
             .select()
             .single();
+            
         _doctorId = newDoctor['id'];
         
-        // Update user role to doctor
+        // Cache new doctor
+         await _appointmentRepo.upsertDoctor(LocalDoctorsCompanion(
+          id: Value(newDoctor['id']),
+          userId: Value(userId),
+           name: Value('Doctor'),
+           specialty: Value('General Practitioner'),
+           clinic: Value('Zovetica Virtual Clinic'),
+          available: const Value(true),
+          verified: const Value(true),
+          createdAt: Value(DateTime.now()),
+          isSynced: const Value(true),
+        ));
+
+        // Update role
         await SupabaseService.client
           .from('users')
           .update({'role': 'doctor'})
-          .eq('id', user.id);
+          .eq('id', userId);
       }
-
-      await Future.wait([
-        _fetchDoctorInfo(),
-        _fetchAppointments(),
-        _fetchAvailability(),
-      ]);
-      
-      _setupRealtimeSubscription();
-
     } catch (e) {
-      debugPrint('Error initializing doctor profile: $e');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+      debugPrint('Error syncing doctor profile: $e');
     }
   }
 
   Future<void> _fetchDoctorInfo() async {
     try {
-      final userData = await _userService.getCurrentUser();
-      if (userData != null) {
-        if (mounted) {
-          setState(() {
-            _firstName = userData['name']?.split(' ').first ?? '';
-            _profileImageUrl = userData['profile_image'] ?? '';
-          });
+      final user = _authService.currentUser;
+      if (user != null) {
+        // Local first
+        final localUser = await _userRepo.getUser(user.id);
+        
+        if (localUser != null) {
+          if (mounted) {
+            setState(() {
+              _firstName = localUser.name?.split(' ').first ?? '';
+              _profileImageUrl = localUser.profileImage ?? '';
+            });
+          }
         }
+        
+        // Background sync (handled by sync engine usually, but we can trigger specific sync if needed)
+        // For now, rely on cached data or SyncEngine.
       }
     } catch (e) {
       debugPrint("Error fetching doctor info: $e");
     }
   }
 
-  Future<void> _fetchAppointments() async {
+  Future<void> _fetchAppointments({bool forceRefresh = false}) async {
     if (_doctorId == null) return;
 
     try {
-      final appointments = await _appointmentService.getDoctorAppointments(_doctorId!);
-      if (mounted) {
-        setState(() {
-          _appointments = appointments;
-        });
+      // 1. Immediate local load
+      if (!forceRefresh) {
+        final localApps = await _appointmentRepo.getDoctorAppointments(_doctorId!, forceRefresh: false);
+        if (mounted && localApps.isNotEmpty) {
+           setState(() {
+            _appointments = localApps.map(_appointmentRepo.localToAppointment).toList();
+          });
+        }
+      }
+
+      // 2. Trigger sync if needed (or if force refresh)
+      // Note: getDoctorAppointments(forceRefresh: true) handles sync then get
+      if (forceRefresh || _appointments.isEmpty) {
+         final syncedApps = await _appointmentRepo.getDoctorAppointments(_doctorId!, forceRefresh: true);
+         if (mounted) {
+           setState(() {
+             _appointments = syncedApps.map(_appointmentRepo.localToAppointment).toList();
+           });
+           debugPrint("📊 Dashboard UI Updated: ${_appointments.length} appointments in state.");
+           debugPrint("   - Pending: ${_appointments.where((a) => a.status == 'pending').length}");
+           debugPrint("   - Upcoming: ${_appointments.where((a) => a.status == 'accepted').length}");
+         }
       }
     } catch (e) {
       debugPrint("Error fetching appointments: $e");
     }
   }
 
-  Future<void> _fetchAvailability() async {
+  Future<void> _fetchAvailability({bool forceRefresh = false}) async {
     if (_doctorId == null) return;
 
     try {
-      final slots = await _appointmentService.getAvailabilitySlots(_doctorId!);
+      final localSlots = await _appointmentRepo.getAvailabilitySlots(_doctorId!, forceRefresh: forceRefresh);
       
-      // Sort logic
+      final parsedSlots = localSlots.map(_appointmentRepo.localSlotToSlot).toList();
+
+      // Sort logic (can rely on repo sort, but repo sort is by day string? Repo sort is by day/time too)
+      // The repo query: orderBy([(s) => OrderingTerm.asc(s.day), (s) => OrderingTerm.asc(s.startTime)])
+      // But day is string "Monday", so alpha sort. We need custom sort.
+      
       final dayOrder = {
         'Monday': 1, 'Tuesday': 2, 'Wednesday': 3, 'Thursday': 4,
         'Friday': 5, 'Saturday': 6, 'Sunday': 7
       };
 
-      final parsedSlots = slots.map((data) {
-        return AvailabilitySlot(
-          id: data['id']?.toString() ?? '',
-          day: data['day'] ?? '',
-          startTime: data['start_time'] ?? '',
-          endTime: data['end_time'] ?? '',
-        );
-      }).toList();
-
-      // Sort by Day then Start Time
       parsedSlots.sort((a, b) {
         int dayA = dayOrder[a.day] ?? 8;
         int dayB = dayOrder[b.day] ?? 8;
@@ -166,29 +271,23 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
       final appointmentId = appointment.uuid ?? appointment.id.toString();
       
       if (status == 'rejected') {
-        await _appointmentService.cancelAppointment(appointmentId);
+        await _appointmentRepo.cancelAppointment(appointmentId);
       } else {
-        await _appointmentService.updateAppointmentStatus(
-          appointmentId: appointmentId,
-          status: status,
-        );
+        await _appointmentRepo.updateAppointmentStatus(appointmentId, status);
       }
+      // UI refresh via local fetch
       _fetchAppointments();
       
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(status == 'accepted' ? 'Appointment accepted' : 'Appointment declined'),
-            backgroundColor: status == 'accepted' ? AppColors.success : AppColors.error,
-            behavior: SnackBarBehavior.floating,
-          ),
+        CustomToast.show(
+          context, 
+          status == 'accepted' ? 'Appointment accepted' : 'Appointment declined', 
+          type: status == 'accepted' ? ToastType.success : ToastType.error
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
-        );
+        CustomToast.show(context, 'Error: $e', type: ToastType.error);
       }
     }
   }
@@ -308,29 +407,49 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                         
                         const SizedBox(height: 48),
                         
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: selectedDays.isEmpty ? null : () async {
-                              await _performAddAvailability(selectedDays, startTime, endTime);
-                              if (context.mounted) Navigator.pop(context);
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                              disabledBackgroundColor: Colors.grey[300], // Visible inactive state
-                              disabledForegroundColor: Colors.grey[500],
-                              elevation: 0,
-                            ),
-                            child: Text(
-                              selectedDays.isEmpty 
-                                  ? "Select Days" 
-                                  : "Add Availability (${selectedDays.length} days)",
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                            ),
-                          ),
+                        // Use StatefulBuilder's state for loading
+                        Builder(
+                          builder: (context) {
+                            bool isAdding = false;
+                            return StatefulBuilder(
+                              builder: (context, setButtonState) {
+                                return SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton(
+                                    onPressed: (selectedDays.isEmpty || isAdding) ? null : () async {
+                                      setButtonState(() => isAdding = true);
+                                      await _performAddAvailability(selectedDays, startTime, endTime);
+                                      if (context.mounted) Navigator.pop(context);
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.primary,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(vertical: 16),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                      disabledBackgroundColor: isAdding ? AppColors.primary.withOpacity(0.7) : Colors.grey[300],
+                                      disabledForegroundColor: isAdding ? Colors.white : Colors.grey[500],
+                                      elevation: 0,
+                                    ),
+                                    child: isAdding
+                                        ? const SizedBox(
+                                            height: 20,
+                                            width: 20,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                            ),
+                                          )
+                                        : Text(
+                                            selectedDays.isEmpty 
+                                                ? "Select Days" 
+                                                : "Add Availability (${selectedDays.length} days)",
+                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                          ),
+                                  ),
+                                );
+                              },
+                            );
+                          },
                         ),
                       ],
                     ),
@@ -399,7 +518,7 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
       bool exists = _slots.any((slot) => slot.day == day && slot.startTime == start && slot.endTime == end);
       
       if (!exists) {
-        await _appointmentService.addAvailabilitySlot(
+        await _appointmentRepo.addAvailabilitySlot(
           doctorId: _doctorId!,
           day: day,
           startTime: start,
@@ -428,7 +547,7 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
   }
 
   Future<void> _removeAvailability(String slotId) async {
-    await _appointmentService.removeAvailabilitySlot(slotId);
+    await _appointmentRepo.removeAvailabilitySlot(slotId);
     _fetchAvailability();
   }
 
@@ -438,53 +557,79 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
   void _setupRealtimeSubscription() {
     if (_doctorId == null) return;
     
+    // Unsubscribe existing
+    if (_appointmentsSubscription != null) {
+      SupabaseService.client.removeChannel(_appointmentsSubscription!);
+    }
+
+    debugPrint('🔌 Setting up Realtime for Doctor: $_doctorId');
+
     _appointmentsSubscription = SupabaseService.client
         .channel('public:appointments:$_doctorId')
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'appointments',
-          // Removing filter temporarily for debugging
-          // filter: PostgresChangeFilter(
-          //   type: PostgresChangeFilterType.eq,
-          //   column: 'doctor_id',
-          //   value: _doctorId!,
-          // ),
+          // REMOVED FILTER to debug if events are being sent at all
           callback: (payload) {
-             debugPrint('🔴 REALTIME EVENT FIRED: ${payload.eventType}');
-             debugPrint('🔴 Payload record: ${payload.newRecord}');
+             debugPrint('🔴 RECIEVED REALTIME EVENT!');
+             debugPrint('   Type: ${payload.eventType}');
+             debugPrint('   Record: ${payload.newRecord}');
+             debugPrint('   Old: ${payload.oldRecord}');
              
-             // Manually filter in callback for now
              final newRecord = payload.newRecord;
-             if (newRecord != null && newRecord['doctor_id'] == _doctorId) {
-                 debugPrint('✅ Valid event for this doctor');
-                 _fetchAppointments();
+             if (newRecord != null) {
+                 // Check if it matches our doctor (Handle strict or loose comparison)
+                 final eventDoctorId = newRecord['doctor_id']?.toString();
                  
-                 if (payload.eventType == PostgresChangeEvent.insert) {
-                   if (newRecord['status'] == 'pending') {
-                     if (mounted) {
-                       AppNotifications.showInfo(
-                         context, 
-                         'New Appointment Request Received!',
-                         actionLabel: 'View',
-                         onAction: () {}, 
-                       );
+                 debugPrint('   Event Doctor ID: $eventDoctorId');
+                 debugPrint('   My Doctor ID: $_doctorId');
+                 
+                 if (eventDoctorId == _doctorId) {
+                     debugPrint('✅ MATCH! Valid event for this doctor');
+                     
+                     // Trigger sync
+                     Future.microtask(() => _appointmentRepo.syncDoctorAppointments(_doctorId!));
+                     
+                     if (payload.eventType == PostgresChangeEvent.insert) {
+                       if (newRecord['status'] == 'pending') {
+                         NotificationService().showNotification(
+                           id: newRecord['id'].hashCode,
+                           title: 'New Appointment Request',
+                           body: 'A new patient has requested an appointment.',
+                         );
+
+                         if (mounted) {
+                           CustomToast.show(
+                             context, 
+                             'New Appointment Request!',
+                             type: ToastType.info
+                           );
+                         }
+                       }
                      }
-                   }
+                 } else {
+                    debugPrint('⚠️ Event ignored (ID mismatch)');
                  }
-             } else {
-               debugPrint('⚠️ Event for different doctor or null record');
              }
           },
         )
         .subscribe((status, [error]) {
            debugPrint('🔌 Realtime Status: $status $error');
+           if (status == RealtimeSubscribeStatus.subscribed) {
+             debugPrint('✅ Realtime Connected!');
+             // Connected silently
+           } else if (status == RealtimeSubscribeStatus.closed || status == RealtimeSubscribeStatus.timedOut) {
+              debugPrint('❌ Realtime Disconnected/Error: $error');
+           }
         });
   }
 
   @override
   void dispose() {
-    _appointmentsSubscription?.unsubscribe();
+    if (_appointmentsSubscription != null) {
+      SupabaseService.client.removeChannel(_appointmentsSubscription!);
+    }
     super.dispose();
   }
 
@@ -493,32 +638,29 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
   void _goToHistory() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const AppointmentScreen(isDoctor: true)),
+      MaterialPageRoute(builder: (context) => AppointmentScreen(isDoctor: true, doctorId: _doctorId)),
     );
   }
 
   Future<void> _refreshData() async {
     await Future.wait([
       _fetchDoctorInfo(),
-      _fetchAppointments(),
-      _fetchAvailability(),
+      _fetchAppointments(forceRefresh: true),
+      _fetchAvailability(forceRefresh: true),
     ]);
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
+    if (_isLoading && _appointmentsStream == null) {
       return const Scaffold(
         backgroundColor: AppColors.cloud,
         body: Center(child: CircularProgressIndicator()),
       );
     }
 
-    final pendingCount = _appointments.where((a) => a.status == 'pending').length;
-    final upcomingCount = _appointments.where((a) => a.status == 'accepted').length;
-
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB), // Clean off-white background
+      backgroundColor: const Color(0xFFF9FAFB),
       floatingActionButton: Container(
         decoration: BoxDecoration(
           gradient: AppGradients.primaryCta,
@@ -541,82 +683,94 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.add_rounded, color: Colors.white, size: 24),
-                  SizedBox(width: 8),
-                  Text('Add Slot', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                   Icon(Icons.add_rounded, color: Colors.white, size: 24),
+                   SizedBox(width: 8),
+                   Text('Add Slot', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
                 ],
               ),
             ),
           ),
         ),
       ),
-      body: RefreshIndicator(
-        onRefresh: _refreshData,
-        color: AppColors.primary,
-        backgroundColor: Colors.white,
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(), // Ensure scroll works even if content is short
-          slivers: [
-            // App Bar
-            SliverAppBar(
-              pinned: true,
-              backgroundColor: AppColors.primary,
-              title: const Text(
-                'Dashboard',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  fontSize: 20,
+      body: StreamBuilder<List<LocalAppointment>>(
+        stream: _appointmentsStream,
+        builder: (context, snapshot) {
+          // Convert stream data to UI models
+          final localApps = snapshot.data ?? [];
+          final currentAppointments = localApps.map(_appointmentRepo.localToAppointment).toList();
+          
+          // Calculate stats from stream data
+          final pendingCount = currentAppointments.where((a) => a.status == 'pending').length;
+          final upcomingCount = currentAppointments.where((a) => a.status == 'accepted').length;
+
+          // Update local cache reference if needed for other methods (optional, but good for debug)
+          _appointments = currentAppointments;
+
+          return AppRefreshIndicator(
+            onRefresh: _refreshData,
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverAppBar(
+                  pinned: true,
+                  backgroundColor: AppColors.primary,
+                  title: const Text(
+                    'Dashboard',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      fontSize: 20,
+                    ),
+                  ),
+                  flexibleSpace: Container(
+                    decoration: const BoxDecoration(
+                      gradient: AppGradients.primaryDiagonal,
+                    ),
+                  ),
+                  actions: [
+                    IconButton(
+                      onPressed: _goToHistory,
+                      icon: const Icon(Icons.history_rounded, color: Colors.white),
+                      tooltip: 'Appointment History',
+                    ),
+                  ],
                 ),
-              ),
-              flexibleSpace: Container(
-                decoration: const BoxDecoration(
-                  gradient: AppGradients.primaryDiagonal,
-                ),
-              ),
-              actions: [
-                IconButton(
-                  onPressed: _goToHistory,
-                  icon: const Icon(Icons.history_rounded, color: Colors.white),
-                  tooltip: 'Appointment History',
+      
+                SliverToBoxAdapter(
+                  child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+                      child: Column(
+                        children: [
+                          _buildSectionHeader("Overview"),
+                          const SizedBox(height: 12),
+                          _buildStatsGrid(pendingCount, upcomingCount),
+                          const SizedBox(height: 24),
+                          
+                          _buildSectionHeader("Appointment Requests", count: pendingCount),
+                          const SizedBox(height: 12),
+                          if (pendingCount == 0)
+                            _buildEmptyState('No pending requests', Icons.check_circle_outline)
+                          else
+                            ...currentAppointments.where((a) => a.status == 'pending').map(_buildAppointmentCard),
+                          
+                          const SizedBox(height: 32),
+                          
+                          _buildSectionHeader("Weekly Schedule"),
+                          const SizedBox(height: 12),
+                          if (_slots.isEmpty)
+                            _buildEmptyState('No availability configured', Icons.calendar_today_outlined)
+                          else
+                            _buildGroupedAvailabilityList(),
+                            
+                          const SizedBox(height: 100),
+                        ],
+                      ),
+                    ),
                 ),
               ],
             ),
-  
-            // Stats & Content
-            SliverToBoxAdapter(
-              child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-                  child: Column(
-                    children: [
-                      _buildSectionHeader("Overview"),
-                      const SizedBox(height: 12),
-                      _buildStatsGrid(pendingCount, upcomingCount),
-                      const SizedBox(height: 24),
-                      
-                      _buildSectionHeader("Appointment Requests", count: pendingCount),
-                      const SizedBox(height: 12),
-                      if (pendingCount == 0)
-                        _buildEmptyState('No pending requests', Icons.check_circle_outline)
-                      else
-                        ..._appointments.where((a) => a.status == 'pending').map(_buildAppointmentCard),
-                      
-                      const SizedBox(height: 32),
-                      
-                      _buildSectionHeader("Weekly Schedule"),
-                      const SizedBox(height: 12),
-                      if (_slots.isEmpty)
-                        _buildEmptyState('No availability configured', Icons.calendar_today_outlined)
-                      else
-                        _buildGroupedAvailabilityList(),
-                        
-                      const SizedBox(height: 100),
-                    ],
-                  ),
-                ),
-            ),
-          ],
-        ),
+          );
+        }
       ),
     );
   }
@@ -655,23 +809,56 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
   }
 
   Widget _buildSectionHeader(String title, {int? count}) {
-    return Row(
-      children: [
-        Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.charcoal)),
-        if (count != null && count > 0) ...[
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: AppColors.error,
-              borderRadius: BorderRadius.circular(10),
+    return GestureDetector(
+      onLongPress: () {
+        // Hidden Debug Menu
+        showDialog(context: context, builder: (ctx) => AlertDialog(
+          title: const Text("Debug Info"),
+          content: Column(
+             mainAxisSize: MainAxisSize.min,
+             crossAxisAlignment: CrossAxisAlignment.start,
+             children: [
+               Text("User ID: ${_authService.currentUser?.id}"),
+               const SizedBox(height: 8),
+               Text("Doctor ID (Table): $_doctorId"),
+               const SizedBox(height: 8),
+               Text("Appointments: ${_appointments.length}"),
+               const SizedBox(height: 8),
+               Text("Pending: ${_appointments.where((a) => a.status == 'pending').length}"),
+             ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _syncDoctorProfile(_authService.currentUser!.id).then((_) {
+                  _fetchAppointments(forceRefresh: true);
+                });
+              }, 
+              child: const Text("Force Sync")
             ),
-            child: Text("$count", style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-          )
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Close")),
+          ],
+        ));
+      },
+      child: Row(
+        children: [
+          Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.charcoal)),
+          if (count != null && count > 0) ...[
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppColors.error,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text("$count", style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+            )
+          ],
+          const Spacer(),
+          // Optional 'View All' can go here
         ],
-        const Spacer(),
-        // Optional 'View All' can go here
-      ],
+      ),
     );
   }
 
@@ -840,16 +1027,4 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
   }
 }
 
-class AvailabilitySlot {
-  final String id;
-  final String day;
-  final String startTime;
-  final String endTime;
 
-  AvailabilitySlot({
-    required this.id,
-    required this.day,
-    required this.startTime,
-    required this.endTime,
-  });
-}

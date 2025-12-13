@@ -11,6 +11,7 @@ CREATE TABLE public.appointments (
   type text,
   status text DEFAULT 'pending'::text,
   created_at timestamp with time zone DEFAULT now(),
+  price integer DEFAULT 0,
   CONSTRAINT appointments_pkey PRIMARY KEY (id),
   CONSTRAINT appointments_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
   CONSTRAINT appointments_doctor_id_fkey FOREIGN KEY (doctor_id) REFERENCES public.doctors(id),
@@ -23,7 +24,7 @@ CREATE TABLE public.availability_slots (
   start_time text NOT NULL,
   end_time text NOT NULL,
   CONSTRAINT availability_slots_pkey PRIMARY KEY (id),
-  CONSTRAINT availability_slots_doctor_id_fkey FOREIGN KEY (doctor_id) REFERENCES public.users(id) ON DELETE CASCADE
+  CONSTRAINT availability_slots_doctor_id_fkey FOREIGN KEY (doctor_id) REFERENCES public.doctors(id)
 );
 CREATE TABLE public.chat_participants (
   id integer NOT NULL DEFAULT nextval('chat_participants_id_seq'::regclass),
@@ -185,5 +186,7 @@ CREATE TABLE public.users (
   bio text,
   created_at timestamp with time zone DEFAULT now(),
   username text UNIQUE,
+  rating numeric DEFAULT NULL::numeric,
+  reviews_count integer DEFAULT 0,
   CONSTRAINT users_pkey PRIMARY KEY (id)
 );
