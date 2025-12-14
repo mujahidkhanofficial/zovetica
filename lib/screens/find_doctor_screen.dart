@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:zovetica/services/doctor_service.dart';
 import 'package:zovetica/services/user_service.dart';
+import '../models/app_models.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_gradients.dart';
 import '../theme/app_spacing.dart';
+import '../theme/app_shadows.dart';
 import 'book_appointment_wizard.dart';
 import '../data/repositories/doctor_repository.dart';
 import '../widgets/widgets.dart';
@@ -17,12 +19,11 @@ class FindDoctorScreen extends StatefulWidget {
 
 class _FindDoctorScreenState extends State<FindDoctorScreen> {
   final TextEditingController _searchController = TextEditingController();
-  final DoctorService _doctorService = DoctorService();
   final UserService _userService = UserService();
   final DoctorRepository _doctorRepo = DoctorRepository.instance;
 
-  List<Map<String, dynamic>> _doctors = [];
-  List<Map<String, dynamic>> _filteredDoctors = [];
+  List<Doctor> _doctors = [];
+  List<Doctor> _filteredDoctors = [];
 
   String? _selectedSpecialty;
   String? _selectedLocation;
@@ -40,54 +41,38 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
   Future<void> _fetchDoctors() async {
     try {
       // Helper to process and display doctors
-      void updateDoctorsList(List<dynamic> doctorsList) {
-        // Convert to Doctor model if needed (handles both Doctor and LocalDoctor inputs if we normalized, but here we just Convert LocalDoctor -> Doctor)
-        // Actually, let's just assume we always work with Doctor models after repo conversion
-        
-        List<Map<String, dynamic>> doctorMaps = doctorsList.map((d) {
-           // d is Doctor model
-           return {
-            'id': d.id.toString(), // Doctor Table ID
-            'user_id': d.userId,   // User Table ID (CRITICAL Fix)
-            'name': d.name,
-            'firstName': d.name.split(' ').first,
-            'lastName': d.name.split(' ').length > 1 ? d.name.split(' ').last : '',
-            'specialty': d.specialty,
-            'location': d.clinic,
-            'clinic': d.clinic,
-            'image': d.image,
-            'profile_image': d.image,
-            'rating': d.rating,
-            'reviews_count': d.reviews,
-            'contact': '',
-          };
-        }).toList();
-
+      void updateDoctorsList(List<Doctor> doctorsList) {
         _specialties = ['All'] +
-            doctorMaps
-                .map((d) => d['specialty']?.toString() ?? 'Unknown')
+            doctorsList
+                .map((d) => d.specialty)
+                .where((s) => s.isNotEmpty)
                 .toSet()
                 .toList();
 
         _locations = ['All'] +
-            doctorMaps
-                .map((d) => d['location']?.toString() ?? 'Unknown')
+            doctorsList
+                .map((d) => d.clinic)
+                .where((l) => l.isNotEmpty)
                 .toSet()
                 .toList();
 
-        setState(() {
-          _doctors = doctorMaps;
-          _filteredDoctors = doctorMaps; // Reset filter on new data
-          if (_selectedSpecialty == null) {
-             _selectedSpecialty = 'All';
-             _selectedLocation = 'All';
+        if (mounted) {
+          setState(() {
+            _doctors = doctorsList;
+            _filteredDoctors = doctorsList;
+            if (_selectedSpecialty == null) {
+              _selectedSpecialty = 'All';
+              _selectedLocation = 'All';
+            }
+            _isLoading = false;
+          });
+
+          // Re-apply filters if they exist
+          if (_searchController.text.isNotEmpty ||
+              _selectedSpecialty != 'All' ||
+              _selectedLocation != 'All') {
+            _filterDoctors();
           }
-          _isLoading = false;
-        });
-        
-        // Re-apply filters if they exist
-        if (_searchController.text.isNotEmpty || _selectedSpecialty != 'All' || _selectedLocation != 'All') {
-          _filterDoctors();
         }
       }
 
@@ -97,20 +82,19 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
         final doctors = localDoctors.map(_doctorRepo.localDoctorToDoctor).toList();
         updateDoctorsList(doctors);
       } else {
-        setState(() => _isLoading = true);
+        if (mounted) setState(() => _isLoading = true);
       }
 
       // 2. Sync from server
       await _doctorRepo.syncDoctors();
-      
+
       // 3. Update from cache again (guaranteed fresh)
       final updatedLocal = await _doctorRepo.getDoctors();
       final doctors = updatedLocal.map(_doctorRepo.localDoctorToDoctor).toList();
       updateDoctorsList(doctors);
-      
     } catch (e) {
       debugPrint("Error fetching doctors: $e");
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -119,91 +103,57 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
 
     setState(() {
       _filteredDoctors = _doctors.where((doctor) {
-        bool matchesSearch = doctor['firstName'].toLowerCase().contains(search) ||
-            doctor['lastName'].toLowerCase().contains(search);
+        bool matchesSearch = doctor.name.toLowerCase().contains(search);
 
-        bool matchesSpecialty =
-            _selectedSpecialty == 'All' || doctor['specialty'] == _selectedSpecialty;
+        bool matchesSpecialty = _selectedSpecialty == 'All' ||
+            doctor.specialty == _selectedSpecialty;
 
         bool matchesLocation =
-            _selectedLocation == 'All' || doctor['location'] == _selectedLocation;
+            _selectedLocation == 'All' || doctor.clinic == _selectedLocation;
 
         return matchesSearch && matchesSpecialty && matchesLocation;
       }).toList();
     });
   }
 
-  void _showDoctorDetails(Map<String, dynamic> doctor) async {
+  void _showDoctorDetails(Doctor doctor) async {
     try {
-      // Use user_id if available, otherwise try id (fallback)
-      final targetId = doctor['user_id'] ?? doctor['id'];
-      
-      // If we already have most info in 'doctor' map, we should fallback to showing it 
-      // even if user fetch fails. But let's try to fetch user details first.
-      
-      final data = await _userService.getUserById(targetId);
-      
-      if (!mounted) return;
-      
-      if (data != null) {
-        final contact = data['phone'] ?? '';
-        showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          backgroundColor: Colors.transparent,
-          builder: (context) => _buildDoctorBottomSheet(data, contact),
-        );
-      } else {
-        // Fallback: Show bottom sheet with existing doctor data if user fetch failed
-        // We construct a 'data' map from 'doctor' map to reuse the widget
-        final fallbackData = {
-          'id': doctor['id'],
-          'name': doctor['name'],
-          'profile_image': doctor['image'],
-          'specialty': doctor['specialty'],
-          'clinic': doctor['clinic'],
-          'rating': doctor['rating'],
-          'reviews_count': doctor['reviews_count'],
-          'is_verified': true, // Assume true for listed doctors
-        };
-        
-        showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          backgroundColor: Colors.transparent,
-          builder: (context) => _buildDoctorBottomSheet(fallbackData, ''),
-        );
+      // Fetch full user details if possible for contact info
+      // Use userId if available, otherwise fallback to basic doctor info
+      Map<String, dynamic>? userData;
+      if (doctor.userId != null) {
+        userData = await _userService.getUserById(doctor.userId!);
       }
+
+      if (!mounted) return;
+
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => _buildDoctorBottomSheet(doctor, userData),
+      );
     } catch (e) {
       debugPrint("Error fetching doctor details: $e");
-       // Fallback on error too
-       if (!mounted) return;
-        final fallbackData = {
-          'id': doctor['id'],
-          'name': doctor['name'],
-          'profile_image': doctor['image'],
-          'specialty': doctor['specialty'],
-          'clinic': doctor['clinic'],
-          'rating': doctor['rating'],
-          'reviews_count': doctor['reviews_count'],
-           'is_verified': true,
-        };
-        showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          backgroundColor: Colors.transparent,
-          builder: (context) => _buildDoctorBottomSheet(fallbackData, ''),
-        );
+      if (!mounted) return;
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => _buildDoctorBottomSheet(doctor, null),
+      );
     }
   }
 
-  Widget _buildDoctorBottomSheet(Map<String, dynamic> data, String contact) {
-    final rating = (data['rating'] is num) ? (data['rating'] as num).toDouble() : 0.0;
-    final reviewCount = data['reviews_count'] ?? 0;
-    final hasReviews = reviewCount > 0; // Check if doctor has any reviews
-    final clinic = data['clinic'] ?? 'Zovetica Clinic';
-    final isVerified = data['is_verified'] ?? true; // Assume verified for now
+  Widget _buildDoctorBottomSheet(Doctor doctor, Map<String, dynamic>? userData) {
     
+    // Merge doctor data with potential user data enhancements
+    final isVerified = true; // Assume listed doctors are verified
+    final contact = userData?['phone'] ?? ''; // Info from UserService
+    
+    // We strictly use the Doctor model for display as it is the source of truth for the listing
+    // But we might enrich it with userData for things like specific verified status if available
+
     return Container(
       decoration: BoxDecoration(
         color: AppColors.white,
@@ -223,7 +173,7 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.xl),
-          
+
           // Doctor avatar with verification badge
           Stack(
             children: [
@@ -234,8 +184,8 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
                   shape: BoxShape.circle,
                 ),
                 child: CachedAvatar(
-                  imageUrl: data['profile_image'],
-                  name: data['name'] ?? 'D',
+                  imageUrl: doctor.image,
+                  name: doctor.name,
                   radius: 50,
                   backgroundColor: AppColors.white,
                 ),
@@ -262,13 +212,13 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
-          
+
           // Name with verified text
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                data['name'] ?? '',
+                doctor.name,
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w700,
@@ -282,7 +232,7 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
             ],
           ),
           const SizedBox(height: 4),
-          
+
           // Specialty badge
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -291,7 +241,7 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
-              data['specialty'] ?? 'General Veterinarian',
+              doctor.specialty,
               style: TextStyle(
                 color: AppColors.secondaryDark,
                 fontWeight: FontWeight.w600,
@@ -300,8 +250,8 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
-          
-          // Stats row: Rating, Reviews, Experience
+
+          // Stats row
           Container(
             padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
             decoration: BoxDecoration(
@@ -313,10 +263,16 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
               children: [
                 // Rating
                 _buildStatItem(
-                  icon: hasReviews ? Icons.star_rounded : Icons.auto_awesome_rounded,
-                  iconColor: hasReviews ? Colors.amber : AppColors.secondary,
-                  value: hasReviews ? rating.toStringAsFixed(1) : 'New',
-                  label: hasReviews ? 'Rating' : 'Doctor',
+                  icon: doctor.reviews > 0
+                      ? Icons.star_rounded
+                      : Icons.auto_awesome_rounded,
+                  iconColor: doctor.reviews > 0
+                      ? Colors.amber
+                      : AppColors.secondary,
+                  value: doctor.reviews > 0
+                      ? doctor.rating.toStringAsFixed(1)
+                      : 'New',
+                  label: doctor.reviews > 0 ? 'Rating' : 'Doctor',
                 ),
                 // Divider
                 Container(
@@ -328,7 +284,7 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
                 _buildStatItem(
                   icon: Icons.reviews_rounded,
                   iconColor: AppColors.primary,
-                  value: reviewCount.toString(),
+                  value: doctor.reviews.toString(),
                   label: 'Reviews',
                 ),
                 // Divider
@@ -337,7 +293,7 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
                   width: 1,
                   color: AppColors.borderLight,
                 ),
-                // Clinic
+                // Status
                 _buildStatItem(
                   icon: Icons.verified_user_rounded,
                   iconColor: AppColors.secondary,
@@ -348,7 +304,7 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.md),
-          
+
           // Clinic location
           Container(
             padding: const EdgeInsets.all(AppSpacing.md),
@@ -364,7 +320,8 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
                     color: AppColors.primary.withAlpha(26),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(Icons.location_on_rounded, color: AppColors.primary),
+                  child:
+                      Icon(Icons.location_on_rounded, color: AppColors.primary),
                 ),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
@@ -379,7 +336,9 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
                         ),
                       ),
                       Text(
-                        clinic.isNotEmpty ? clinic : 'Location not specified',
+                        doctor.clinic.isNotEmpty
+                            ? doctor.clinic
+                            : 'Location not specified',
                         style: TextStyle(
                           color: AppColors.charcoal,
                           fontWeight: FontWeight.w600,
@@ -392,7 +351,7 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.xl),
-          
+
           // Book button
           Container(
             width: double.infinity,
@@ -412,11 +371,28 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
               color: Colors.transparent,
               child: InkWell(
                 onTap: () {
-                   Navigator.pop(context); // Close bottom sheet
-                   Navigator.push(
-                     context, 
-                     MaterialPageRoute(builder: (_) => BookAppointmentWizard(doctor: data))
-                   );
+                  Navigator.pop(context); // Close bottom sheet
+                  // Need to pass a map to BookAppointmentWizard as it expects Map
+                  // Or we update Wizard too? Let's keep Wizard as implies for now and adapt
+                  // Construct map from doctor object + user data if needed
+                  final doctorMap = {
+                     'id': doctor.id,
+                     'user_id': doctor.userId,
+                     'name': doctor.name,
+                     'specialty': doctor.specialty,
+                     'clinic': doctor.clinic,
+                     'image': doctor.image,
+                     'profile_image': doctor.image,
+                     'rating': doctor.rating,
+                     'reviews_count': doctor.reviews,
+                     'contact': contact,
+                  };
+
+                  Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) =>
+                              BookAppointmentWizard(doctor: doctorMap)));
                 },
                 borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
                 child: const Center(
@@ -467,7 +443,6 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
     );
   }
 
-
   void _showFilterSheet() {
     showModalBottomSheet(
       context: context,
@@ -495,7 +470,7 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            
+
             Text(
               'Filter Doctors',
               style: TextStyle(
@@ -505,7 +480,7 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            
+
             // Specialty
             Text(
               'Specialty',
@@ -527,17 +502,20 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
                 child: DropdownButton<String>(
                   isExpanded: true,
                   value: _selectedSpecialty,
-                  icon: Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.primary),
+                  icon: Icon(Icons.keyboard_arrow_down_rounded,
+                      color: AppColors.primary),
                   style: const TextStyle(
                     color: AppColors.charcoal, // Visible text
                     fontSize: 15,
                     fontWeight: FontWeight.w500,
                   ),
                   dropdownColor: Colors.white,
-                  items: _specialties.map((s) => DropdownMenuItem(
-                    value: s,
-                    child: Text(s),
-                  )).toList(),
+                  items: _specialties
+                      .map((s) => DropdownMenuItem(
+                            value: s,
+                            child: Text(s),
+                          ))
+                      .toList(),
                   onChanged: (val) {
                     setState(() {
                       _selectedSpecialty = val;
@@ -549,7 +527,7 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            
+
             // Location
             Text(
               'Location',
@@ -571,17 +549,20 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
                 child: DropdownButton<String>(
                   isExpanded: true,
                   value: _selectedLocation,
-                  icon: Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.primary),
+                  icon: Icon(Icons.keyboard_arrow_down_rounded,
+                      color: AppColors.primary),
                   style: const TextStyle(
                     color: AppColors.charcoal, // Visible text
                     fontSize: 15,
                     fontWeight: FontWeight.w500,
                   ),
                   dropdownColor: Colors.white,
-                  items: _locations.map((l) => DropdownMenuItem(
-                    value: l,
-                    child: Text(l),
-                  )).toList(),
+                  items: _locations
+                      .map((l) => DropdownMenuItem(
+                            value: l,
+                            child: Text(l),
+                          ))
+                      .toList(),
                   onChanged: (val) {
                     setState(() {
                       _selectedLocation = val;
@@ -593,19 +574,19 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
               ),
             ),
             const SizedBox(height: 32),
-            
-            // Clear Filters Button (Optional but helpful)
+
+            // Clear Filters Button
             SizedBox(
               width: double.infinity,
               height: 52,
               child: OutlinedButton(
                 onPressed: () {
-                   setState(() {
-                      _selectedSpecialty = 'All';
-                      _selectedLocation = 'All';
-                      _filterDoctors();
-                    });
-                    Navigator.pop(context);
+                  setState(() {
+                    _selectedSpecialty = 'All';
+                    _selectedLocation = 'All';
+                    _filterDoctors();
+                  });
+                  Navigator.pop(context);
                 },
                 style: OutlinedButton.styleFrom(
                   side: const BorderSide(color: AppColors.borderLight),
@@ -695,8 +676,10 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
                         ),
                         decoration: InputDecoration(
                           hintText: 'Search specialists...',
-                          hintStyle: TextStyle(color: AppColors.slate.withAlpha(179)),
-                          prefixIcon: Icon(Icons.search_rounded, color: AppColors.primary),
+                          hintStyle:
+                              TextStyle(color: AppColors.slate.withAlpha(179)),
+                          prefixIcon:
+                              Icon(Icons.search_rounded, color: AppColors.primary),
                           filled: true,
                           fillColor: Colors.white,
                           border: OutlineInputBorder(
@@ -740,7 +723,7 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
               ],
             ),
           ),
-          
+
           // Doctor List
           Expanded(
             child: _isLoading
@@ -797,19 +780,13 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
     );
   }
 
-  Widget _buildDoctorCard(Map<String, dynamic> doctor) {
+  Widget _buildDoctorCard(Doctor doctor) {
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(10),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        boxShadow: AppShadows.card,
       ),
       child: Material(
         color: Colors.transparent,
@@ -828,21 +805,21 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
                     shape: BoxShape.circle,
                   ),
                   child: CachedAvatar(
-                    imageUrl: doctor['image'],
-                    name: doctor['firstName'] ?? '?',
+                    imageUrl: doctor.image,
+                    name: doctor.name,
                     radius: 32,
                     backgroundColor: AppColors.white,
                   ),
                 ),
                 const SizedBox(width: AppSpacing.lg),
-                
+
                 // Info
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        "${doctor['firstName']} ${doctor['lastName']}",
+                        doctor.name,
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -858,29 +835,11 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
                             color: AppColors.secondary,
                           ),
                           const SizedBox(width: 4),
-                          Text(
-                            doctor['specialty'] ?? '',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: AppColors.slate,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.location_on_outlined,
-                            size: 14,
-                            color: AppColors.slate,
-                          ),
-                          const SizedBox(width: 4),
                           Expanded(
                             child: Text(
-                              doctor['clinic'] ?? '',
+                              doctor.specialty,
                               style: TextStyle(
-                                fontSize: 12,
+                                fontSize: 13,
                                 color: AppColors.slate,
                               ),
                               overflow: TextOverflow.ellipsis,
@@ -888,27 +847,76 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
                           ),
                         ],
                       ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.star_rounded,
+                            size: 16,
+                            color: AppColors.golden,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            doctor.rating.toStringAsFixed(1),
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.charcoal,
+                            ),
+                          ),
+                          Text(
+                            ' (${doctor.reviews} reviews)',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.slate,
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
-                
-                // Arrow
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: AppColors.cloud,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    Icons.arrow_forward_ios,
-                    size: 14,
-                    color: AppColors.slate,
-                  ),
-                ),
+
+                // Status badge
+                _buildStatusBadge(doctor.available),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildStatusBadge(bool available) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: available
+            ? AppColors.secondary.withAlpha(38)
+            : AppColors.slate.withAlpha(26),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: available ? AppColors.secondary : AppColors.slate,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            available ? 'Available' : 'Busy',
+            style: TextStyle(
+              color: available ? AppColors.secondaryDark : AppColors.slate,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }

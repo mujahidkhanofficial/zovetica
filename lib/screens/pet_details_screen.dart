@@ -629,16 +629,7 @@ class _PetDetailsScreenState extends State<PetDetailsScreen> {
                            );
                            if (newState && mounted) {
                               // Simple haptic or snackbar feedback
-                              ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Good job! ${task.title} completed.'),
-                                  backgroundColor: AppColors.secondary,
-                                  duration: const Duration(seconds: 1),
-                                  behavior: SnackBarBehavior.floating,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                ),
-                              );
+                              AppNotifications.showSuccess(context, 'Good job! ${task.title} completed.');
                            }
                         },
                         leading: Container(

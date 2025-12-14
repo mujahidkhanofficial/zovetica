@@ -147,7 +147,7 @@ class AppointmentService {
         }
 
         appointments.add(Appointment(
-          id: data['id'] is int ? data['id'] : data['id'].hashCode,
+          id: data['id']?.toString() ?? '',
           uuid: data['id']?.toString(), // Store actual UUID for updates
           doctorId: data['doctor_id']?.toString(), // CRITICAL FIX: Store doctor ID for local query filtering
           doctor: patientData['name'] ?? 'Unknown Patient',
@@ -181,7 +181,7 @@ class AppointmentService {
       final petData = data['pets'] ?? {};
 
       return Appointment(
-        id: data['id'] is int ? data['id'] : data['id'].hashCode,
+        id: data['id']?.toString() ?? '',
         doctor: patientData['name'] ?? 'Unknown Patient',
         doctorImage: patientData['profile_image'], // Map for avatar
         clinic: 'Pet Owner',
@@ -218,18 +218,19 @@ class AppointmentService {
   }
 
   /// Reschedule appointment (update date and time)
-  /// Sets status to 'rescheduled_pending' for pet owner approval
+  /// newStatus: 'rescheduled_pending' (doctor) or 'accepted' (pet owner)
   Future<void> rescheduleAppointment({
     required String appointmentId,
     required String newDate,
     required String newTime,
+    String newStatus = 'rescheduled_pending',  // Default for backward compatibility
   }) async {
     await _client
         .from(_tableName)
         .update({
           'date': newDate,
           'time': newTime,
-          'status': 'rescheduled_pending', // Pet owner needs to accept/reject
+          'status': newStatus,
         })
         .eq('id', appointmentId);
   }
@@ -306,7 +307,7 @@ class AppointmentService {
       final petData = data['pets'] ?? {};
 
       return Appointment(
-        id: data['id'] is int ? data['id'] : data['id'].hashCode,
+        id: data['id']?.toString() ?? '',
         uuid: data['id']?.toString(), // Store actual UUID for database operations
         doctorId: data['doctor_id']?.toString(), // Doctor's ID for fetching available slots
         doctorImage: userData['profile_image'], // Doctor's profile image
@@ -334,7 +335,7 @@ class AppointmentService {
       final petData = data['pets'] ?? {};
 
       return Appointment(
-        id: data['id'] is int ? data['id'] : data['id'].hashCode,
+        id: data['id']?.toString() ?? '',
         uuid: data['id']?.toString(), // Store actual UUID for database operations
         doctorId: data['doctor_id']?.toString(), // Doctor's ID for fetching available slots
         doctorImage: userData['profile_image'], // Doctor's profile image

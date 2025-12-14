@@ -11,6 +11,13 @@ class Post {
   final int commentsCount;
   final bool isLiked;
   final List<String> tags;
+  
+  // Moderation fields
+  final bool isFlagged;
+  final DateTime? flaggedAt;
+  final String? flaggedReason;
+  final String? moderatedBy;
+  final String? postLocation;
 
   Post({
     required this.id,
@@ -23,7 +30,18 @@ class Post {
     required this.commentsCount,
     required this.isLiked,
     required this.tags,
+    this.isFlagged = false,
+    this.flaggedAt,
+    this.flaggedReason,
+    this.moderatedBy,
+    this.postLocation,
   });
+
+  // Getters for admin content screen compatibility
+  String? get authorName => author.name;
+  String? get authorImage => author.profileImage;
+  DateTime get createdAt => timestamp;
+  String? get location => postLocation;
 
   factory Post.fromMap(Map<String, dynamic> map) {
     return Post(
@@ -41,8 +59,15 @@ class Post {
       timestamp: DateTime.parse(map['created_at']),
       likesCount: map['likes_count'] ?? 0,
       commentsCount: map['comments_count'] ?? 0,
-      isLiked: map['is_liked'] ?? false, // Support mapped is_liked if query provides it
+      isLiked: map['is_liked'] ?? false,
       tags: List<String>.from(map['tags'] ?? []),
+      isFlagged: map['is_flagged'] ?? false,
+      flaggedAt: map['flagged_at'] != null 
+          ? DateTime.tryParse(map['flagged_at'].toString()) 
+          : null,
+      flaggedReason: map['flagged_reason'],
+      moderatedBy: map['moderated_by'],
+      postLocation: map['location'],
     );
   }
 
@@ -51,6 +76,8 @@ class Post {
     int? likesCount,
     int? commentsCount,
     bool? isLiked,
+    bool? isFlagged,
+    String? flaggedReason,
   }) {
     return Post(
       id: id,
@@ -63,6 +90,11 @@ class Post {
       commentsCount: commentsCount ?? this.commentsCount,
       isLiked: isLiked ?? this.isLiked,
       tags: tags,
+      isFlagged: isFlagged ?? this.isFlagged,
+      flaggedAt: flaggedAt,
+      flaggedReason: flaggedReason ?? this.flaggedReason,
+      moderatedBy: moderatedBy,
+      postLocation: postLocation,
     );
   }
 }

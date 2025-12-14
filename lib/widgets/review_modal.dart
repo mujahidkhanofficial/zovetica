@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import '../models/doctor_model.dart';
 import '../services/review_service.dart';
-import '../widgets/widgets.dart'; // For AppColors, etc if available there, or define locally
+import '../theme/app_colors.dart';
+import '../theme/app_spacing.dart';
+import '../utils/app_notifications.dart';
+import '../widgets/pet_button.dart';
 
 class ReviewModal extends StatefulWidget {
   final Map<String, dynamic> doctor; // Passing raw map or Doctor model
@@ -27,9 +29,7 @@ class _ReviewModalState extends State<ReviewModal> {
 
   void _submitReview() async {
     if (_rating == 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a rating')),
-      );
+      AppNotifications.showWarning(context, 'Please select a rating');
       return;
     }
 
@@ -48,18 +48,11 @@ class _ReviewModalState extends State<ReviewModal> {
       if (mounted) {
         Navigator.pop(context);
         widget.onReviewSubmitted();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Review submitted! Thank you.'),
-            backgroundColor: Color(0xFF10B981),
-          ),
-        );
+        AppNotifications.showSuccess(context, 'Review submitted! Thank you.');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error submitting review: $e')),
-        );
+        AppNotifications.showError(context, 'Error submitting review: $e');
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
@@ -74,9 +67,9 @@ class _ReviewModalState extends State<ReviewModal> {
 
     return Container(
       padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppSpacing.radiusXl)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -86,7 +79,7 @@ class _ReviewModalState extends State<ReviewModal> {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: Colors.grey[300],
+              color: AppColors.borderLight,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -100,7 +93,7 @@ class _ReviewModalState extends State<ReviewModal> {
                 height: 60,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFFF4F6F9),
+                  color: AppColors.cloud,
                   image: doctorImage != null && doctorImage.isNotEmpty
                       ? DecorationImage(image: NetworkImage(doctorImage), fit: BoxFit.cover)
                       : null,
@@ -109,10 +102,10 @@ class _ReviewModalState extends State<ReviewModal> {
                     ? Center(
                         child: Text(
                           displayName.isNotEmpty ? displayName[0] : 'D',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFF10B981),
+                            color: AppColors.secondary,
                           ),
                         ),
                       )
@@ -127,16 +120,16 @@ class _ReviewModalState extends State<ReviewModal> {
                       'Rate your visit with',
                       style: TextStyle(
                         fontSize: 14,
-                        color: Colors.grey[600],
+                        color: AppColors.slate,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'Dr. $displayName',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF1F2937),
+                        color: AppColors.charcoal,
                       ),
                     ),
                   ],
@@ -157,7 +150,7 @@ class _ReviewModalState extends State<ReviewModal> {
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   child: Icon(
                     index < _rating ? Icons.star_rounded : Icons.star_outline_rounded,
-                    color: index < _rating ? const Color(0xFFF59E0B) : Colors.grey[300],
+                    color: index < _rating ? AppColors.golden : AppColors.borderLight,
                     size: 40,
                   ),
                 ),
@@ -173,11 +166,11 @@ class _ReviewModalState extends State<ReviewModal> {
             maxLines: 4,
             decoration: InputDecoration(
               hintText: 'Share your experience (optional)',
-              hintStyle: TextStyle(color: Colors.grey[400]),
+              hintStyle: TextStyle(color: AppColors.textMuted),
               filled: true,
-              fillColor: const Color(0xFFF9FAFB),
+              fillColor: AppColors.cloud,
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
                 borderSide: BorderSide.none,
               ),
               contentPadding: const EdgeInsets.all(16),
@@ -186,34 +179,13 @@ class _ReviewModalState extends State<ReviewModal> {
           
           const SizedBox(height: 24),
           
-          // Submit Button
-          SizedBox(
+          // Submit Button - Using PetButton
+          PetButton(
+            text: 'Submit Review',
+            onPressed: _isSubmitting ? null : _submitReview,
+            isLoading: _isSubmitting,
             width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _isSubmitting ? null : _submitReview,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF10B981),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                elevation: 0,
-              ),
-              child: _isSubmitting
-                  ? const SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                    )
-                  : const Text(
-                      'Submit Review',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-            ),
+            height: 52,
           ),
         ],
       ),

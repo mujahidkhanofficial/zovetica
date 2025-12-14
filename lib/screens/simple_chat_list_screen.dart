@@ -11,6 +11,7 @@ import '../theme/app_spacing.dart';
 import '../widgets/offline_banner.dart';
 import '../widgets/cached_avatar.dart';
 import '../widgets/widgets.dart'; // For AppRefreshIndicator
+import '../utils/app_notifications.dart';
 import 'simple_chat_screen.dart';
 
 class SimpleChatListScreen extends StatefulWidget {
@@ -418,12 +419,7 @@ class _SimpleChatListScreenState extends State<SimpleChatListScreen> {
     if (!mounted) return;
 
     if (friends.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Add friends first to start chatting!'),
-          backgroundColor: AppColors.accent,
-        ),
-      );
+      AppNotifications.showWarning(context, 'Add friends first to start chatting!');
       return;
     }
 
@@ -654,13 +650,7 @@ class _SimpleChatListScreenState extends State<SimpleChatListScreen> {
                             
                             if (!mounted) return;
                             
-                            ScaffoldMessenger.of(parentContext).showSnackBar(
-                              SnackBar(
-                                content: Text('Failed to create chat: $e'),
-                                backgroundColor: AppColors.error,
-                                duration: const Duration(seconds: 3),
-                              ),
-                            );
+                            AppNotifications.showError(parentContext, 'Failed to create chat: $e');
                           }
                         },
                       ),

@@ -14,7 +14,6 @@ import '../theme/app_shadows.dart';
 import '../widgets/enterprise_header.dart'; 
 import '../widgets/widgets.dart'; 
 import '../utils/app_notifications.dart';
-import '../widgets/custom_toast.dart';
 import '../services/notification_service.dart';
 import '../data/repositories/appointment_repository.dart';
 import '../data/repositories/user_repository.dart';
@@ -279,15 +278,15 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
       _fetchAppointments();
       
       if (mounted) {
-        CustomToast.show(
-          context, 
-          status == 'accepted' ? 'Appointment accepted' : 'Appointment declined', 
-          type: status == 'accepted' ? ToastType.success : ToastType.error
-        );
+        if (status == 'accepted') {
+          AppNotifications.showSuccess(context, 'Appointment accepted');
+        } else {
+          AppNotifications.showError(context, 'Appointment declined');
+        }
       }
     } catch (e) {
       if (mounted) {
-        CustomToast.show(context, 'Error: $e', type: ToastType.error);
+        AppNotifications.showError(context, 'Error: $e');
       }
     }
   }
@@ -537,12 +536,11 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
       if (addedCount > 0) message = 'Added $addedCount new slots.';
       if (duplicateCount > 0) message += (addedCount > 0 ? ' ' : '') + 'Skipped $duplicateCount duplicates.';
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: addedCount > 0 ? AppColors.success : Colors.orange,
-        ),
-      );
+      if (addedCount > 0) {
+        AppNotifications.showSuccess(context, message);
+      } else {
+        AppNotifications.showWarning(context, message);
+      }
     }
   }
 
@@ -600,11 +598,7 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                          );
 
                          if (mounted) {
-                           CustomToast.show(
-                             context, 
-                             'New Appointment Request!',
-                             type: ToastType.info
-                           );
+                           AppNotifications.showInfo(context, 'New Appointment Request!');
                          }
                        }
                      }

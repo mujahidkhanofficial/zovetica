@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:zovetica/services/supabase_service.dart';
 import 'package:zovetica/data/repositories/user_repository.dart';
 import 'vet_main_screen.dart';
+import 'admin/admin_dashboard_screen.dart';
 import 'home_screen.dart';
 import 'auth_screen.dart';
 
@@ -123,6 +124,8 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
     if (_userRole == 'doctor') {
       return const VetMainScreen();
+    } else if (_userRole == 'admin' || _userRole == 'super_admin') {
+      return const AdminDashboardScreen();
     } else {
       return const HomeScreen(); // OwnerMainScreen
     }

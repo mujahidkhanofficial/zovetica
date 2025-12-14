@@ -4,6 +4,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_gradients.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_shadows.dart';
+import '../utils/app_notifications.dart';
 import '../data/repositories/notification_repository.dart';
 import '../data/local/database.dart';
 
@@ -68,9 +69,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
           IconButton(
             onPressed: () {
               _notificationRepo.markAllAsRead();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('All marked as read')),
-              );
+              AppNotifications.showInfo(context, 'All marked as read');
             },
             icon: const Icon(Icons.done_all_rounded, color: Colors.white),
             tooltip: 'Mark all as read',

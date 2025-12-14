@@ -1,6 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../models/app_models.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_shadows.dart';
+import '../theme/app_spacing.dart';
 import '../theme/app_gradients.dart';
 import '../screens/profile_screen.dart';
 import '../widgets/widgets.dart';
@@ -14,6 +17,7 @@ class PostCard extends StatelessWidget {
   final VoidCallback? onDoubleTap;
   final VoidCallback? onMoreOptions;
   final bool showHeartOverlay;
+  final String? flaggedReason;
 
   const PostCard({
     super.key,
@@ -24,6 +28,7 @@ class PostCard extends StatelessWidget {
     this.onDoubleTap,
     this.onMoreOptions,
     this.showHeartOverlay = false,
+    this.flaggedReason,
   });
 
   String _formatTime(DateTime timestamp) {
@@ -37,33 +42,47 @@ class PostCard extends StatelessWidget {
     return '${timestamp.day}/${timestamp.month}/${timestamp.year}';
   }
 
-  String _getAuthorInitials() {
-    final parts = post.author.name.split(' ');
-    if (parts.length >= 2 && parts[0].isNotEmpty && parts[1].isNotEmpty) {
-      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    }
-    return post.author.name.isNotEmpty ? post.author.name[0].toUpperCase() : 'U';
-  }
-
   @override
   Widget build(BuildContext context) {
     return RepaintBoundary(
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(15),
-              blurRadius: 16,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          boxShadow: AppShadows.card,
+          border: flaggedReason != null ? Border.all(color: AppColors.error, width: 1.5) : null,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Flagged Banner
+            if (flaggedReason != null)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withOpacity(0.1),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(AppSpacing.radiusMd)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Flagged: $flaggedReason',
+                        style: const TextStyle(
+                          color: AppColors.error,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
             // Header
             _buildHeader(context),
             
@@ -76,7 +95,7 @@ class PostCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 15,
                     height: 1.5,
-                    color: Colors.grey[850],
+                    color: AppColors.charcoal,
                     letterSpacing: 0.1,
                   ),
                 ),
@@ -93,7 +112,7 @@ class PostCard extends StatelessWidget {
             _buildStatsRow(),
             
             // Divider
-            Divider(height: 1, color: Colors.grey[200]),
+            Divider(height: 1, color: AppColors.borderLight),
             
             // Action Buttons
             _buildActions(),
@@ -126,7 +145,7 @@ class PostCard extends StatelessWidget {
                 name: post.author.name,
                 imageUrl: post.author.profileImage,
                 radius: 20,
-                backgroundColor: Colors.white,
+                backgroundColor: AppColors.white,
               ),
             ),
           ),
@@ -139,12 +158,12 @@ class PostCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Flexible(
+                      Flexible(
                       child: Text(
                         post.author.name,
                         style: TextStyle(
                           fontWeight: FontWeight.w700,
-                          color: Colors.grey[900],
+                          color: AppColors.charcoal,
                           fontSize: 15,
                         ),
                         overflow: TextOverflow.ellipsis,
@@ -163,7 +182,7 @@ class PostCard extends StatelessWidget {
                           'VET',
                           style: TextStyle(
                             fontSize: 10,
-                            color: Colors.white,
+                            color: AppColors.white,
                             fontWeight: FontWeight.bold,
                             letterSpacing: 0.5,
                           ),
@@ -175,13 +194,13 @@ class PostCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Row(
                   children: [
-                    Icon(Icons.public, size: 12, color: Colors.grey[500]),
+                    Icon(Icons.public, size: 12, color: AppColors.slate),
                     const SizedBox(width: 4),
                     Text(
                       _formatTime(post.timestamp),
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.grey[600],
+                        color: AppColors.slate,
                       ),
                     ),
                   ],
@@ -198,7 +217,7 @@ class PostCard extends StatelessWidget {
               onTap: onMoreOptions,
               child: Padding(
                 padding: const EdgeInsets.all(8),
-                child: Icon(Icons.more_horiz, color: Colors.grey[600], size: 20),
+                child: Icon(Icons.more_horiz, color: AppColors.slate, size: 20),
               ),
             ),
           ),
@@ -227,20 +246,20 @@ class PostCard extends StatelessWidget {
                     fit: BoxFit.cover,
                     placeholder: Container(
                       height: 250,
-                      color: Colors.grey[100],
-                      child: const Center(
+                      color: AppColors.cloud,
+                      child: Center(
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Colors.teal,
+                          color: AppColors.secondary,
                         ),
                       ),
                     ),
                     errorWidget: Container(
                       height: 200,
-                      color: Colors.grey[100],
+                      color: AppColors.cloud,
                       child: Center(
                         child: Icon(Icons.broken_image_outlined, 
-                          color: Colors.grey[400], size: 48),
+                          color: AppColors.textMuted, size: 48),
                       ),
                     ),
                   ),
@@ -277,13 +296,13 @@ class PostCard extends StatelessWidget {
           return Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
-              color: Colors.teal.withAlpha(20),
-              borderRadius: BorderRadius.circular(16),
+              color: AppColors.secondary.withAlpha(20),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
             ),
             child: Text(
               '#$tag',
               style: TextStyle(
-                color: Colors.teal[700],
+                color: AppColors.secondaryDark,
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
@@ -307,16 +326,16 @@ class PostCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
-                color: Colors.red[400],
+                color: AppColors.roseDark,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.favorite, color: Colors.white, size: 10),
+              child: Icon(Icons.favorite, color: AppColors.white, size: 10),
             ),
             const SizedBox(width: 6),
             Text(
               '${post.likesCount}',
               style: TextStyle(
-                color: Colors.grey[600],
+                color: AppColors.slate,
                 fontSize: 13,
               ),
             ),
@@ -326,7 +345,7 @@ class PostCard extends StatelessWidget {
             Text(
               '${post.commentsCount} comment${post.commentsCount > 1 ? 's' : ''}',
               style: TextStyle(
-                color: Colors.grey[600],
+                color: AppColors.slate,
                 fontSize: 13,
               ),
             ),
@@ -360,7 +379,7 @@ class PostCard extends StatelessWidget {
                         child: Icon(
                           post.isLiked ? Icons.favorite : Icons.favorite_outline,
                           key: ValueKey(post.isLiked),
-                          color: post.isLiked ? Colors.red[500] : Colors.grey[600],
+                          color: post.isLiked ? AppColors.roseDark : AppColors.slate,
                           size: 22,
                         ),
                       ),
@@ -368,7 +387,7 @@ class PostCard extends StatelessWidget {
                       Text(
                         'Like',
                         style: TextStyle(
-                          color: post.isLiked ? Colors.red[500] : Colors.grey[700],
+                          color: post.isLiked ? AppColors.roseDark : AppColors.charcoal,
                           fontWeight: FontWeight.w600,
                           fontSize: 13,
                         ),
@@ -394,14 +413,14 @@ class PostCard extends StatelessWidget {
                     children: [
                       Icon(
                         Icons.chat_bubble_outline_rounded,
-                        color: Colors.grey[600],
+                        color: AppColors.slate,
                         size: 20,
                       ),
                       const SizedBox(width: 6),
                       Text(
                         'Comment',
                         style: TextStyle(
-                          color: Colors.grey[700],
+                          color: AppColors.charcoal,
                           fontWeight: FontWeight.w600,
                           fontSize: 13,
                         ),
@@ -417,3 +436,159 @@ class PostCard extends StatelessWidget {
     );
   }
 }
+  
+// ============================================================================
+// REUSABLE POST OPTIONS SHEET
+// ============================================================================
+
+class PostOptionItem {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final VoidCallback onTap;
+
+  PostOptionItem({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.onTap,
+  });
+}
+
+void showPostOptionsModal({
+  required BuildContext context,
+  required String title,
+  required List<PostOptionItem> options,
+}) {
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (context) => Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(25),
+            blurRadius: 20,
+            offset: const Offset(0, -5),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle bar
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(top: 12, bottom: 20),
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            // Title
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.charcoal,
+                ),
+              ),
+            ),
+            // Options
+            ...options.map((option) => _buildOptionTile(
+              icon: option.icon,
+              title: option.title,
+              subtitle: option.subtitle,
+              color: option.color,
+              onTap: option.onTap,
+            )),
+            
+            const SizedBox(height: 12),
+            
+            // Cancel Action
+            ListTile(
+              title: const Center(
+                child: Text(
+                  'Cancel', 
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold, 
+                    color: AppColors.slate,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+              onTap: () => Navigator.pop(context),
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+Widget _buildOptionTile({
+  required IconData icon,
+  required String title,
+  required String subtitle,
+  required Color color,
+  required VoidCallback onTap,
+}) {
+  return Material(
+    color: Colors.transparent,
+    child: InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: color, size: 24),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: color == AppColors.error ? color : AppColors.charcoal,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: AppColors.slate,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: Colors.grey[400], size: 22),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+

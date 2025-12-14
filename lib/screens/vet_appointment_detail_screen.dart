@@ -9,7 +9,7 @@ import 'package:zovetica/theme/app_gradients.dart';
 import 'package:zovetica/theme/app_spacing.dart';
 import 'package:zovetica/theme/app_shadows.dart';
 import 'package:zovetica/widgets/cached_avatar.dart';
-import 'package:zovetica/widgets/custom_toast.dart';
+import 'package:zovetica/utils/app_notifications.dart';
 
 class VetAppointmentDetailScreen extends StatefulWidget {
   final Appointment appointment;
@@ -72,11 +72,7 @@ class _VetAppointmentDetailScreenState extends State<VetAppointmentDetailScreen>
       widget.onStatusChanged?.call();
       
       if (mounted) {
-        CustomToast.show(
-          context, 
-          'Appointment $newStatus', 
-          type: ToastType.success
-        );
+        AppNotifications.showSuccess(context, 'Appointment $newStatus');
         
         if (newStatus == 'rejected' || newStatus == 'cancelled') {
              Navigator.pop(context);
@@ -84,11 +80,7 @@ class _VetAppointmentDetailScreenState extends State<VetAppointmentDetailScreen>
       }
     } catch (e) {
       if (mounted) {
-        CustomToast.show(
-          context, 
-          'Error: $e', 
-          type: ToastType.error
-        );
+        AppNotifications.showError(context, 'Error: $e');
       }
     }
   }

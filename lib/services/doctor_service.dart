@@ -10,33 +10,37 @@ class DoctorService {
   /// Get all verified doctors
   Future<List<Doctor>> getDoctors() async {
     try {
-      // Fetch from 'doctors' table and join 'users' to get profile info
+      // Fetch directly from 'users' table where role is 'doctor'
+      debugPrint("Fetching doctors from Users table...");
       final response = await _client
-          .from('doctors')
-          .select('*, users!inner(*)') // Inner join to ensure user exists
+          .from('users')
+          .select()
+          .eq('role', 'doctor')
           .order('id');
+      
+      debugPrint("Doctors fetch raw response: $response");
 
-      return (response as List).map((data) => _mapJoinedDataToDoctor(data)).toList();
+      final doctors = (response as List).map((data) => _mapUserDataToDoctor(data)).toList();
+      debugPrint("Parsed ${doctors.length} doctors");
+      return doctors;
     } catch (e) {
       debugPrint('Error fetching doctors: $e');
       return [];
     }
   }
 
-  Doctor _mapJoinedDataToDoctor(Map<String, dynamic> data) {
-    final userData = data['users'] as Map<String, dynamic>? ?? {};
-    
+  Doctor _mapUserDataToDoctor(Map<String, dynamic> data) {
     return Doctor(
-      id: data['id']?.toString() ?? '', // This is the Doctor Table ID
-      name: userData['name'] ?? 'Unknown Doctor',
-      specialty: userData['specialty'] ?? data['specialty_override'] ?? 'General Veterinarian',
-      rating: (userData['rating'] is num) ? (userData['rating'] as num).toDouble() : 0.0,
-      reviews: userData['reviews_count'] ?? 0,
+      id: data['id']?.toString() ?? '', 
+      name: data['name'] ?? 'Unknown Doctor',
+      specialty: data['specialty'] ?? 'General Veterinarian',
+      rating: (data['rating'] is num) ? (data['rating'] as num).toDouble() : 0.0,
+      reviews: data['reviews_count'] ?? 0,
       nextAvailable: 'Available',
-      clinic: userData['clinic'] ?? 'Zovetica Clinic',
-      image: userData['profile_image'] ?? '',
+      clinic: data['clinic'] ?? 'Zovetica Clinic',
+      image: data['profile_image'] ?? '',
       available: true,
-      userId: data['user_id']?.toString(),
+      userId: data['id']?.toString(), // For users table, id IS the user_id
     );
   }
 }

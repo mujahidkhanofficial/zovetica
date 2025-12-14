@@ -25,8 +25,16 @@ import '../data/repositories/pet_repository.dart';
 import 'package:drift/drift.dart' hide Column;
 import '../data/local/database.dart';
 import '../utils/app_notifications.dart';
+import 'admin/admin_dashboard_screen.dart';
+
+import 'package:zovetica/services/supabase_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:zovetica/screens/auth_screen.dart';
+
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final bool isAdmin;
+  
+  const HomeScreen({super.key, this.isAdmin = false});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -58,6 +66,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _fetchUser();
     _fetchPets();
+    _setupUserSubscription(); // Added call here
     _screens.addAll([
       const SizedBox(), // Placeholder for Home
       const FindDoctorScreen(),
@@ -112,6 +121,65 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       debugPrint('Error fetching pets: $e');
     }
+  }
+
+  RealtimeChannel? _userSubscription;
+
+  void _setupUserSubscription() {
+    final userId = _authService.currentUser?.id;
+    if (userId == null) return;
+
+    _userSubscription = SupabaseService.client
+        .channel('public:users:$userId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'users',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'id',
+            value: userId,
+          ),
+          callback: (payload) async {
+            final newRecord = payload.newRecord;
+            if (newRecord != null) {
+              if (newRecord['is_banned'] == true) {
+                // User was banned - force logout
+                debugPrint("User banned in real-time. Logging out.");
+                await _authService.signOut();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Account banned: ${newRecord['banned_reason'] ?? "Violation of terms"}'),
+                      backgroundColor: Colors.red,
+                      duration: const Duration(seconds: 5),
+                    ),
+                  );
+                  Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const AuthScreen()),
+                    (route) => false,
+                  );
+                }
+              } else {
+                 // Update local username if changed
+                 if (mounted && newRecord['name'] != null) {
+                   setState(() {
+                     _username = newRecord['name'];
+                   });
+                 }
+              }
+            }
+          },
+        )
+        .subscribe();
+  }
+
+  @override
+  void dispose() {
+    if (_userSubscription != null) {
+      SupabaseService.client.removeChannel(_userSubscription!);
+    }
+    super.dispose();
   }
 
   void _onItemTapped(int index) {
@@ -439,6 +507,50 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildQuickActionsGrid() {
+    // Create list of action cards
+    final List<Widget> actionCards = [
+      _buildActionCard(
+        "Emergency",
+        Icons.warning_amber_rounded,
+        AppGradients.coralCta,
+        () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EmergencyScreen())),
+      ),
+      _buildActionCard(
+        "Find Vet",
+        Icons.medical_services_rounded,
+        AppGradients.primaryCta,
+        () => setState(() => _selectedIndex = 1),
+      ),
+      _buildActionCard(
+        "Ask AI",
+        Icons.auto_awesome_rounded,
+        AppGradients.primaryDiagonal,
+        () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AiChatScreen())),
+      ),
+      _buildActionCard(
+        "Community",
+        Icons.people_alt_rounded,
+        AppGradients.warmHeader,
+        () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CommunityScreen())),
+      ),
+    ];
+
+    // Add Admin Dashboard card if user is admin
+    if (widget.isAdmin) {
+      actionCards.add(
+        _buildActionCard(
+          "Admin",
+          Icons.admin_panel_settings_rounded,
+          const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
+          ),
+          () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminDashboardScreen())),
+        ),
+      );
+    }
+
     return LayoutBuilder(builder: (context, constraints) {
       return GridView.count(
         crossAxisCount: 2,
@@ -447,32 +559,7 @@ class _HomeScreenState extends State<HomeScreen> {
         crossAxisSpacing: 16,
         mainAxisSpacing: 16,
         childAspectRatio: 1.5,
-        children: [
-          _buildActionCard(
-            "Emergency",
-            Icons.warning_amber_rounded,
-            AppGradients.coralCta,
-            () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EmergencyScreen())),
-          ),
-          _buildActionCard(
-            "Find Vet",
-            Icons.medical_services_rounded,
-            AppGradients.primaryCta,
-            () => setState(() => _selectedIndex = 1),
-          ),
-          _buildActionCard(
-            "Ask AI",
-            Icons.auto_awesome_rounded,
-            AppGradients.primaryDiagonal, // Minty feel
-            () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AiChatScreen())),
-          ),
-          _buildActionCard(
-            "Community",
-            Icons.people_alt_rounded,
-            AppGradients.warmHeader,
-            () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CommunityScreen())),
-          ),
-        ],
+        children: actionCards,
       );
     });
   }
@@ -629,16 +716,7 @@ class _HomeScreenState extends State<HomeScreen> {
              );
              
              if (val == true && mounted) {
-                 ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                 ScaffoldMessenger.of(context).showSnackBar(
-                   SnackBar(
-                     content: Text('${task.title} completed!'),
-                     backgroundColor: AppColors.success,
-                     duration: const Duration(milliseconds: 1500),
-                     behavior: SnackBarBehavior.floating,
-                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                   ),
-                 );
+                 AppNotifications.showSuccess(context, '${task.title} completed!');
              }
           },
         ),

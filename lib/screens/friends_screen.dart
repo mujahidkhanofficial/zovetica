@@ -3,6 +3,7 @@ import '../services/friend_service.dart';
 import '../services/chat_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_shadows.dart';
+import '../utils/app_notifications.dart';
 import 'profile_screen.dart';
 import 'chat_screen.dart';
 import '../widgets/widgets.dart';
@@ -52,7 +53,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
     final success = await _friendService.acceptFriendRequest(userId);
     if (success) {
       _fetchData(); // Refresh both lists
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Friend request accepted!')));
+      AppNotifications.showSuccess(context, 'Friend request accepted!');
     }
   }
 

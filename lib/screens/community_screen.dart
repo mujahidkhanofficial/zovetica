@@ -9,6 +9,7 @@ import '../services/post_service.dart';
 import '../services/user_service.dart';
 import '../services/supabase_service.dart';
 import '../utils/image_picker_helper.dart';
+import '../utils/app_notifications.dart';
 import '../widgets/post_card.dart';
 import '../widgets/comments_sheet.dart';
 import '../widgets/offline_banner.dart';
@@ -812,21 +813,11 @@ class _CommunityScreenState extends State<CommunityScreen>
               if (success) {
                 _initializePosts(); // Refresh posts
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: const Text('Post updated successfully!'),
-                      backgroundColor: AppColors.success,
-                    ),
-                  );
+                  AppNotifications.showSuccess(context, 'Post updated successfully!');
                 }
               } else {
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: const Text('Failed to update post'),
-                      backgroundColor: AppColors.error,
-                    ),
-                  );
+                  AppNotifications.showError(context, 'Failed to update post');
                 }
               }
             },
@@ -870,21 +861,11 @@ class _CommunityScreenState extends State<CommunityScreen>
                   _posts.removeWhere((p) => p.id == post.id);
                 });
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: const Text('Post deleted'),
-                      backgroundColor: AppColors.secondary,
-                    ),
-                  );
+                  AppNotifications.showSuccess(context, 'Post deleted');
                 }
               } else {
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: const Text('Failed to delete post'),
-                      backgroundColor: AppColors.error,
-                    ),
-                  );
+                  AppNotifications.showError(context, 'Failed to delete post');
                 }
               }
             },

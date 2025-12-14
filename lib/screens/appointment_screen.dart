@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'; 
 import '../services/supabase_service.dart'; // SupabaseService
 import '../services/notification_service.dart';
-import '../widgets/custom_toast.dart';
 import '../models/app_models.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_gradients.dart';
@@ -14,6 +13,7 @@ import '../widgets/offline_banner.dart';
 import '../services/review_service.dart'; // Review Service
 import '../widgets/widgets.dart';
 import '../widgets/cached_avatar.dart'; // Review Modal
+import '../utils/app_notifications.dart';
 import 'find_doctor_screen.dart';
 import '../data/repositories/appointment_repository.dart';
 import '../data/local/database.dart';
@@ -208,22 +208,14 @@ class _AppointmentScreenState extends State<AppointmentScreen> {
                    }
 
                    if (title != null) {
-                      // 1. System Notification
+                      // System Notification (for background/external changes)
                       NotificationService().showNotification(
                         id: newRecord['id'].hashCode,
                         title: title,
                         body: body!,
                       );
-
-                      // 2. In-App Toast
-                      if (mounted) {
-                        CustomToast.show(
-                          context, 
-                          title,
-                          type: status == 'accepted' ? ToastType.success : ToastType.error
-                        );
-                      }
-                   }
+                      // Note: In-app toast removed to avoid duplicate with user action handler
+                    }
                  }
              }
           },
@@ -607,30 +599,15 @@ class _AppointmentScreenState extends State<AppointmentScreen> {
       
       if (mounted) {
         setState(() {});
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(
-                  accept ? Icons.check_circle : Icons.cancel,
-                  color: Colors.white,
-                ),
-                const SizedBox(width: 10),
-                Expanded(child: Text(message)),
-              ],
-            ),
-            backgroundColor: accept ? AppColors.secondary : AppColors.error,
-          ),
-        );
+        if (accept) {
+          AppNotifications.showSuccess(context, message);
+        } else {
+          AppNotifications.showError(context, message);
+        }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: Failed to update appointment'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        AppNotifications.showError(context, 'Error: Failed to update appointment');
       }
     }
   }
@@ -991,27 +968,11 @@ class _AppointmentScreenState extends State<AppointmentScreen> {
         await _appointmentService.cancelAppointment(appointment.uuid ?? appointment.id.toString());
         setState(() {});
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  Icon(Icons.check_circle, color: Colors.white),
-                  const SizedBox(width: 10),
-                  Text('Appointment cancelled'),
-                ],
-              ),
-              backgroundColor: AppColors.secondary,
-            ),
-          );
+          AppNotifications.showSuccess(context, 'Appointment cancelled');
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error: $e'),
-              backgroundColor: AppColors.error,
-            ),
-          );
+          AppNotifications.showError(context, 'Error: $e');
         }
       }
     }
@@ -1347,6 +1308,7 @@ class _AppointmentScreenState extends State<AppointmentScreen> {
                                     appointmentId: appointment.uuid ?? appointment.id.toString(),
                                     newDate: selectedDate,
                                     newTime: selectedTimeSlot!,
+                                    isDoctor: widget.isDoctor,  // Pass role so correct status is set
                                   );
                                   
                                   // Refresh UI
@@ -1357,27 +1319,11 @@ class _AppointmentScreenState extends State<AppointmentScreen> {
                                   }
                                   setState(() {});
                                   if (mounted) {
-                                    ScaffoldMessenger.of(this.context).showSnackBar(
-                                      SnackBar(
-                                        content: Row(
-                                          children: [
-                                            Icon(Icons.check_circle, color: Colors.white),
-                                            const SizedBox(width: 10),
-                                            Text('Appointment rescheduled successfully!'),
-                                          ],
-                                        ),
-                                        backgroundColor: AppColors.success,
-                                      ),
-                                    );
+                                    AppNotifications.showSuccess(context, 'Appointment rescheduled successfully!');
                                   }
                                 } catch (e) {
                                   if (mounted) {
-                                    ScaffoldMessenger.of(this.context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('Error: $e'),
-                                        backgroundColor: AppColors.error,
-                                      ),
-                                    );
+                                    AppNotifications.showError(context, 'Error: $e');
                                   }
                                 }
                               },

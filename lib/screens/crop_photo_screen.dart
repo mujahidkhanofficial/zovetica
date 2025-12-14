@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:crop_image/crop_image.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_gradients.dart';
+import '../utils/app_notifications.dart';
 
 class CropPhotoScreen extends StatefulWidget {
   final File imageFile;
@@ -48,9 +49,7 @@ class _CropPhotoScreenState extends State<CropPhotoScreen> {
     } catch (e) {
       debugPrint('Crop Error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to crop image')),
-        );
+        AppNotifications.showError(context, 'Failed to crop image');
       }
     } finally {
       if (mounted) {

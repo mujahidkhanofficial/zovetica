@@ -1491,37 +1491,11 @@ Widget _buildPetTag(String label, Color color) {
     if (success) {
       _fetchUserPosts(); // Refresh
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white),
-                const SizedBox(width: 12),
-                const Text('Post updated successfully!'),
-              ],
-            ),
-            backgroundColor: AppColors.success,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        );
+        AppNotifications.showSuccess(context, 'Post updated successfully!');
       }
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.error_outline, color: Colors.white),
-                const SizedBox(width: 12),
-                const Text('Failed to update post'),
-              ],
-            ),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        );
+        AppNotifications.showError(context, 'Failed to update post');
       }
     }
   }
@@ -1549,37 +1523,11 @@ Widget _buildPetTag(String label, Color color) {
         _userPosts.removeWhere((p) => p.id == postId);
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white),
-                const SizedBox(width: 12),
-                const Text('Post deleted'),
-              ],
-            ),
-            backgroundColor: AppColors.secondary,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        );
+        AppNotifications.showSuccess(context, 'Post deleted');
       }
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.error_outline, color: Colors.white),
-                const SizedBox(width: 12),
-                const Text('Failed to delete post'),
-              ],
-            ),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        );
+        AppNotifications.showError(context, 'Failed to delete post');
       }
     }
   }

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../models/app_models.dart';
 import '../services/post_service.dart';
 import '../screens/profile_screen.dart';
+import '../theme/app_colors.dart';
+import '../utils/app_notifications.dart';
 
 /// Reusable Facebook-style Comments Sheet Widget
 /// Enterprise-level design with responsive layout and clear text visibility
@@ -123,13 +125,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
         setState(() {
           _comments.removeWhere((c) => c.id == tempComment.id);
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Failed to post comment'),
-            backgroundColor: Colors.red[400],
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        AppNotifications.showError(context, 'Failed to post comment');
       }
     } finally {
       if (mounted) setState(() => _isSending = false);
@@ -500,7 +496,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
             child: const Text('Delete'),
           ),
         ],
@@ -523,9 +519,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
         setState(() {
           _comments.insert(deletedCommentIndex, deletedComment);
         });
-         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to delete comment')),
-        );
+         AppNotifications.showError(context, 'Failed to delete comment');
       }
     } catch (e) {
       if (deletedComment != null && mounted) {
@@ -575,9 +569,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
         await widget.postService.editComment(comment.id, save);
       } catch (e) {
          if (mounted) {
-           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to edit comment')),
-          );
+           AppNotifications.showError(context, 'Failed to edit comment');
            // Optionally revert
          }
       }
@@ -701,9 +693,9 @@ class _CommentsSheetState extends State<CommentsSheet> {
                               value: 'delete',
                               child: Row(
                                 children: [
-                                  Icon(Icons.delete, size: 18, color: Colors.red),
+                                  Icon(Icons.delete, size: 18, color: AppColors.error),
                                   SizedBox(width: 8),
-                                  Text('Delete', style: TextStyle(color: Colors.red)),
+                                  Text('Delete', style: TextStyle(color: AppColors.error)),
                                 ],
                               ),
                             ),

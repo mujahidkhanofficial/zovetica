@@ -12,6 +12,7 @@ import '../theme/app_gradients.dart';
 import '../theme/app_spacing.dart';
 import '../widgets/offline_banner.dart';
 import '../widgets/cached_avatar.dart';
+import '../utils/app_notifications.dart';
 
 class SimpleChatScreen extends StatefulWidget {
   final int chatId;
@@ -572,9 +573,7 @@ class _SimpleChatScreenState extends State<SimpleChatScreen> {
       _scrollToBottom();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to send: $e')),
-      );
+      AppNotifications.showError(context, 'Failed to send: $e');
       
       // Restore message on error
       setState(() {

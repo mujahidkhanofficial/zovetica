@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:zovetica/screens/vet_main_screen.dart';
+import 'package:zovetica/screens/admin/admin_dashboard_screen.dart';
 import 'package:zovetica/screens/home_screen.dart';
 import 'package:zovetica/services/auth_service.dart';
 import 'package:zovetica/services/user_service.dart';
@@ -120,22 +121,29 @@ class _LoginFormState extends State<LoginForm> {
     try {
       setState(() => _isLoading = true);
 
+      debugPrint('🔐 LOGIN Step 1: Attempting authentication...');
       final response = await _authService.signIn(
         email: email,
         password: password,
       );
+      debugPrint('✅ LOGIN Step 1: Auth SUCCESS - User ID: ${response.user?.id}');
 
       if (response.user == null) {
+        debugPrint('❌ LOGIN Step 1: Auth returned null user');
         throw Exception('Login failed');
       }
 
+      debugPrint('🔍 LOGIN Step 2: Fetching user data from public.users...');
       final userData = await _userService.getUserById(response.user!.id);
+      debugPrint('✅ LOGIN Step 2: User data received: $userData');
 
       if (userData == null) {
+        debugPrint('❌ LOGIN Step 2: No user data in public.users table');
         throw Exception('User data not found');
       }
 
       final role = userData['role'] ?? "pet_owner";
+      debugPrint('✅ LOGIN Step 3: User role is: $role');
 
       if (!mounted) return;
 
@@ -144,6 +152,11 @@ class _LoginFormState extends State<LoginForm> {
           context,
           MaterialPageRoute(builder: (_) => const VetMainScreen()),
         );
+      } else if (role == "admin" || role == "super_admin") {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AdminDashboardScreen()), // Updated import needed
+        );
       } else {
         Navigator.pushReplacement(
           context,
@@ -151,12 +164,18 @@ class _LoginFormState extends State<LoginForm> {
         );
       }
     } on AuthException catch (e) {
+      debugPrint('❌ LOGIN AuthException: ${e.message}');
+      debugPrint('❌ LOGIN AuthException Code: ${e.statusCode}');
+      debugPrint('❌ LOGIN AuthException Details: ${e.toString()}');
       if (!mounted) return;
-      setState(() => _errorMessage = _getAuthErrorMessage(e));
+      setState(() => _errorMessage = _getAuthErrorMessage(e) + '\n\nCode: ${e.statusCode}\nDetails: ${e.message}'); // Show details on UI for debugging
     } on SocketException {
+      debugPrint('❌ LOGIN SocketException');
       if (!mounted) return;
       setState(() => _errorMessage = 'Unable to connect. Please check your internet connection.');
     } catch (e) {
+      debugPrint('❌ LOGIN Generic Error: $e');
+      debugPrint('❌ LOGIN Error Type: ${e.runtimeType}');
       if (!mounted) return;
       setState(() => _errorMessage = _getGenericErrorMessage(e));
     } finally {

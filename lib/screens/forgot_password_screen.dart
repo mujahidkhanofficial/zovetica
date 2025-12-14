@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:zovetica/services/auth_service.dart';
+import '../theme/app_colors.dart';
+import '../utils/app_notifications.dart';
+import '../widgets/pet_button.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -17,9 +20,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   void _resetPassword() async {
     final email = _emailController.text.trim();
     if (email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your email')),
-      );
+      AppNotifications.showWarning(context, 'Please enter your email');
       return;
     }
 
@@ -27,13 +28,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
     try {
       await _authService.resetPassword(email);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Password reset email sent')),
-      );
+      AppNotifications.showSuccess(context, 'Password reset email sent');
     } on AuthException catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      AppNotifications.showError(context, e.message);
     } finally {
       setState(() => _loading = false);
     }
@@ -52,16 +49,16 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         title: const Text('Forgot Password'),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
+        iconTheme: IconThemeData(color: AppColors.charcoal),
       ),
       body: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Column(
           children: [
             const SizedBox(height: 40),
-            const Text(
+            Text(
               'Enter your email to reset your password',
-              style: TextStyle(fontSize: 16, color: Colors.black87),
+              style: TextStyle(fontSize: 16, color: AppColors.charcoal),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
@@ -74,21 +71,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            SizedBox(
+            PetButton(
+              text: 'Send Reset Link',
+              onPressed: _loading ? null : _resetPassword,
+              isLoading: _loading,
               width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _loading ? null : _resetPassword,
-                child: _loading
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      )
-                    : const Text('Send Reset Link'),
-              ),
             ),
           ],
         ),
@@ -96,3 +83,4 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     );
   }
 }
+

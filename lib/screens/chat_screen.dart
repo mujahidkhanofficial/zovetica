@@ -5,6 +5,7 @@ import '../services/supabase_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_gradients.dart';
 import '../theme/app_shadows.dart';
+import '../utils/app_notifications.dart';
 
 class ChatScreen extends StatefulWidget {
   final int chatId;
@@ -79,14 +80,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       _scrollToBottom();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Failed to send message'),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
+        AppNotifications.showError(context, 'Failed to send message');
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -618,9 +612,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               onTap: () {
                 Clipboard.setData(ClipboardData(text: msg['content'] ?? ''));
                 Navigator.pop(context);
-                ScaffoldMessenger.of(this.context).showSnackBar(
-                  const SnackBar(content: Text('Message copied')),
-                );
+                AppNotifications.showSuccess(this.context, 'Message copied');
               },
             ),
             ListTile(
@@ -638,9 +630,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                 Navigator.pop(context);
                 final success = await _chatService.deleteMessage(msgId);
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(success ? 'Message deleted' : 'Failed to delete')),
-                  );
+                  if (success) {
+                    AppNotifications.showSuccess(context, 'Message deleted');
+                  } else {
+                    AppNotifications.showError(context, 'Failed to delete');
+                  }
                 }
               },
             ),
@@ -677,9 +671,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               Navigator.pop(context);
               final success = await _chatService.editMessage(msgId, editController.text.trim());
               if (mounted) {
-                ScaffoldMessenger.of(this.context).showSnackBar(
-                  SnackBar(content: Text(success ? 'Message updated' : 'Failed to update')),
-                );
+                if (success) {
+                  AppNotifications.showSuccess(this.context, 'Message updated');
+                } else {
+                  AppNotifications.showError(this.context, 'Failed to update');
+                }
               }
             },
             child: Text('Save', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),

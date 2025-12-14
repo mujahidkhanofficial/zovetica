@@ -205,7 +205,7 @@ class AppointmentRepository {
   /// Convert LocalAppointment to Appointment model for UI
   Appointment localToAppointment(LocalAppointment local) {
     return Appointment(
-      id: 0,
+      id: local.id,
       uuid: local.id,
       doctor: local.doctorName ?? 'Doctor',
       doctorId: local.doctorId,
@@ -269,18 +269,24 @@ class AppointmentRepository {
     }
   }
 
-  /// Reschedule an appointment (doctor emergency)
+  /// Reschedule an appointment
+  /// If doctor reschedules: status = 'rescheduled_pending' (needs pet owner approval)
+  /// If pet owner reschedules: status = 'accepted' (auto-confirmed)
   Future<void> rescheduleAppointment({
     required String appointmentId,
     required DateTime newDate,
     required String newTime,
+    bool isDoctor = true,  // Default to doctor for backward compatibility
   }) async {
-    // Optimistic local update - set to rescheduled_pending for pet owner approval
+    // Different status based on who reschedules
+    final newStatus = isDoctor ? 'rescheduled_pending' : 'accepted';
+    
+    // Optimistic local update
     await (_db.update(_db.localAppointments)..where((a) => a.id.equals(appointmentId))).write(
       LocalAppointmentsCompanion(
         date: Value(newDate),
         time: Value(newTime),
-        status: const Value('rescheduled_pending'),
+        status: Value(newStatus),
       ),
     );
     
@@ -291,6 +297,7 @@ class AppointmentRepository {
         appointmentId: appointmentId,
         newDate: dateStr,
         newTime: newTime,
+        newStatus: newStatus,  // Pass the correct status based on who reschedules
       );
     } catch (e) {
       debugPrint('❌ Error syncing rescheduled appointment: $e');
