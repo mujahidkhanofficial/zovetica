@@ -142,6 +142,26 @@ class _LoginFormState extends State<LoginForm> {
         throw Exception('User data not found');
       }
 
+      // CRITICAL: Check Ban Status Immediately BEFORE allowing access
+      final bannedAt = userData['banned_at'];
+      final isBanned = userData['is_banned'] == true || bannedAt != null;
+      
+      debugPrint('🔒 LOGIN SECURITY CHECK: banned_at=$bannedAt, is_banned=${userData['is_banned']}, isBanned=$isBanned');
+      
+      if (isBanned) {
+        debugPrint('⛔ LOGIN BLOCKED: User is banned - Signing out and blocking access');
+        await _authService.signOut(); // Kill the session we just made
+        
+        if (!mounted) return;
+        setState(() {
+          _errorMessage = "YOU ARE BLOCKED FOR VIOLATING TERMS";
+          _isLoading = false;
+        });
+        return; // STOP execution - user stays on login page
+      }
+      
+      debugPrint('✅ LOGIN SECURITY: User is NOT banned, proceeding...');
+
       final role = userData['role'] ?? "pet_owner";
       debugPrint('✅ LOGIN Step 3: User role is: $role');
 

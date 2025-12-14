@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:zovetica/services/supabase_service.dart';
+import 'package:zovetica/services/user_service.dart';
 import 'package:zovetica/data/repositories/user_repository.dart';
 import 'vet_main_screen.dart';
 import 'admin/admin_dashboard_screen.dart';
@@ -16,6 +17,7 @@ class AuthWrapper extends StatefulWidget {
 
 class _AuthWrapperState extends State<AuthWrapper> {
   final _userRepo = UserRepository.instance;
+  final _userService = UserService();
   bool _isLoading = true;
   Session? _session;
   String? _userRole;
@@ -31,10 +33,32 @@ class _AuthWrapperState extends State<AuthWrapper> {
     final session = SupabaseService.client.auth.currentSession;
     
     if (session != null) {
-      // 2. If session exists, try to get role from local cache first
+      // 2. If session exists, check ban status from SERVER first (security critical)
       try {
+        final userData = await _userService.getUserById(session.user.id);
+        
+        // SECURITY: Check if user is banned
+        final bannedAt = userData?['banned_at'];
+        final isBanned = userData?['is_banned'] == true || bannedAt != null;
+        
+        debugPrint('🔒 AUTH WRAPPER SECURITY: banned_at=$bannedAt, isBanned=$isBanned');
+        
+        if (isBanned) {
+          debugPrint('⛔ AUTH WRAPPER: User is BANNED - Invalidating session');
+          await SupabaseService.client.auth.signOut();
+          
+          if (mounted) {
+            setState(() {
+              _session = null;
+              _isLoading = false;
+            });
+          }
+          return; // Stop - user will see AuthScreen
+        }
+        
+        // User not banned, get role
         final localUser = await _userRepo.getCurrentUser();
-        var role = localUser?.role;
+        var role = localUser?.role ?? userData?['role'];
         
         // If not locally found, try force sync (if online)
         if (role == null) {

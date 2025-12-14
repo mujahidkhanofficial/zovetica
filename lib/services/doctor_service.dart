@@ -11,18 +11,13 @@ class DoctorService {
   Future<List<Doctor>> getDoctors() async {
     try {
       // Fetch directly from 'users' table where role is 'doctor'
-      debugPrint("Fetching doctors from Users table...");
       final response = await _client
           .from('users')
           .select()
           .eq('role', 'doctor')
           .order('id');
       
-      debugPrint("Doctors fetch raw response: $response");
-
-      final doctors = (response as List).map((data) => _mapUserDataToDoctor(data)).toList();
-      debugPrint("Parsed ${doctors.length} doctors");
-      return doctors;
+      return (response as List).map((data) => _mapUserDataToDoctor(data)).toList();
     } catch (e) {
       debugPrint('Error fetching doctors: $e');
       return [];

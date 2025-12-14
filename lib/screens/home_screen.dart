@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:zovetica/services/supabase_service.dart';
 import 'package:zovetica/services/user_service.dart';
 import 'package:zovetica/services/auth_service.dart';
 import '../data/repositories/user_repository.dart';
@@ -141,9 +144,10 @@ class _HomeScreenState extends State<HomeScreen> {
             value: userId,
           ),
           callback: (payload) async {
+             // Keep the real-time kick feature as user mentioned it was working
             final newRecord = payload.newRecord;
             if (newRecord != null) {
-              if (newRecord['is_banned'] == true) {
+              if (newRecord['is_banned'] == true || newRecord['banned_at'] != null) {
                 // User was banned - force logout
                 debugPrint("User banned in real-time. Logging out.");
                 await _authService.signOut();
@@ -173,6 +177,7 @@ class _HomeScreenState extends State<HomeScreen> {
         )
         .subscribe();
   }
+
 
   @override
   void dispose() {

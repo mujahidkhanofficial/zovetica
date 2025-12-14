@@ -32,14 +32,10 @@ class DoctorRepository {
   /// Sync doctors from remote to local
   Future<void> syncDoctors() async {
     try {
-      debugPrint("Syncing doctors...");
       final doctors = await _doctorService.getDoctors();
-      debugPrint("Got ${doctors.length} doctors from service");
       final companions = doctors.map(_mapDoctorToCompanion).toList();
       await _db.upsertDoctors(companions);
-      debugPrint("Upserted doctors to local DB");
     } catch (e) {
-      debugPrint("Error syncing doctors: $e");
       // Silently fail - use cached data
     }
   }
