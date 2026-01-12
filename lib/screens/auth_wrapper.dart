@@ -74,11 +74,14 @@ class _AuthWrapperState extends State<AuthWrapper> {
           });
         }
       } catch (e) {
-        // Fallback
+        // ✅ SECURITY FIX: Fail SECURELY - deny access on error
+        // Do NOT silently allow user in if security/ban check fails!
+        debugPrint('❌ SECURITY: Session check failed, denying access: $e');
+        await SupabaseService.client.auth.signOut();
         if (mounted) {
           setState(() {
-            _session = session;
-            _userRole = 'pet_owner'; 
+            _session = null;  // Force re-authentication
+            _userRole = null;
             _isLoading = false;
           });
         }
@@ -146,24 +149,45 @@ class _AuthWrapperState extends State<AuthWrapper> {
             'name': metadata['full_name'] ?? 'User',
             'username': metadata['username'],
             'phone': metadata['phone'],
-            'role': metadata['role'] ?? 'pet_owner',
-            'specialty': metadata['specialty'],
-            'clinic': metadata['clinic'],
+            // ✅ SECURITY: ALWAYS set role to 'pet_owner' - NEVER trust client metadata!
+            // Role changes require admin action via RLS-protected operations
+            'role': 'pet_owner',
+            // ❌ REMOVED: specialty, clinic from metadata - these are doctor-only fields
           });
-          debugPrint('✅ Profile created successfully');
+          debugPrint('✅ Profile created successfully with role: pet_owner');
         } catch (e) {
           debugPrint('⚠️ Profile creation error (might already exist): $e');
+        }
+      } else {
+        // SECURITY: Check if user is banned
+        final bannedAt = existingUser['banned_at'];
+        final isBanned = existingUser['is_banned'] == true || bannedAt != null;
+        
+        if (isBanned) {
+          debugPrint('⛔ SECURITY: User is BANNED - denying access');
+          await SupabaseService.client.auth.signOut();
+          if (mounted) {
+            setState(() {
+              _session = null;
+              _userRole = null;
+              _isLoading = false;
+            });
+          }
+          return;
         }
       }
       
       // Reload user data
       await _reloadUser(session);
     } catch (e) {
-      debugPrint('❌ Error handling sign in: $e');
+      // ✅ SECURITY FIX: Fail SECURELY - deny access on error
+      // Do NOT silently allow user in if security check fails!
+      debugPrint('❌ SECURITY: Error during sign-in check, denying access: $e');
+      await SupabaseService.client.auth.signOut();
       if (mounted) {
         setState(() {
-          _session = session;
-          _userRole = 'pet_owner';
+          _session = null;  // Force re-authentication
+          _userRole = null;
           _isLoading = false;
         });
       }

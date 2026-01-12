@@ -21,16 +21,18 @@ class AuthService {
   /// - The user IS created in auth.users with email_confirmed_at = NULL
   /// - A verification email IS sent to the user
   /// 
-  /// Callers should NOT treat user==null as failure when email confirmation is enabled.
+  /// SECURITY: Role is NOT passed to Supabase - it is assigned server-side
+  /// by database trigger to prevent privilege escalation attacks.
+  /// New users are ALWAYS created as 'pet_owner'.
+  /// Role changes require admin action via RLS-protected operations.
   Future<AuthResponse> signUp({
     required String email,
     required String password,
     required String name,
     required String username,
     String? phone,
-    String? role,
-    String? specialty,
-    String? clinic,
+    // NOTE: role, specialty, clinic are NOT passed to Supabase
+    // They must be set via admin operations after signup
   }) async {
     final response = await _client.auth.signUp(
       email: email,
@@ -40,15 +42,10 @@ class AuthService {
         'full_name': name,
         'username': username,
         'phone': phone,
-        'role': role ?? 'pet_owner',
-        'specialty': specialty,
-        'clinic': clinic,
+        // ❌ SECURITY: DO NOT include role here - prevents privilege escalation
+        // Role is set to 'pet_owner' by database trigger ONLY
       },
     );
-    
-    // The response.user may be null when email confirmation is enabled.
-    // This is EXPECTED behavior, not an error.
-    // The trigger in Supabase will create the profile when email is verified.
     
     return response;
   }

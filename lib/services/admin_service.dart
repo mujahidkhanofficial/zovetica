@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import '../models/user_model.dart';
 import '../models/post_model.dart';
@@ -97,20 +98,26 @@ class AdminService {
   }
 
   /// Bans a user with a reason.
+  /// SECURITY: Uses RPC function that enforces admin check server-side
   Future<bool> banUser(String userId, String reason) async {
     try {
       final adminId = _client.auth.currentUser?.id;
-      if (adminId == null) return false;
+      if (adminId == null) {
+        debugPrint('❌ SECURITY: No authenticated user');
+        return false;
+      }
 
-      await _client.from('users').update({
-        'banned_at': DateTime.now().toIso8601String(),
-        'banned_reason': reason,
-        'banned_by': adminId,
-      }).eq('id', userId);
+      // ✅ SECURITY: Use RPC function for server-side validation
+      await _client.rpc('ban_user', params: {
+        'target_user_id': userId,
+        'reason': reason,
+      });
 
+      debugPrint('✅ User $userId banned successfully');
       return true;
     } catch (e) {
-      print('Error banning user: $e');
+      // Log security-relevant errors
+      debugPrint('❌ SECURITY: Ban user failed: $e');
       return false;
     }
   }
@@ -132,16 +139,18 @@ class AdminService {
   }
 
   /// Updates a user's role (super admin only).
-  /// Updates a user's role (super admin only).
+  /// SECURITY: Uses RPC function that enforces super_admin check server-side
   /// If promoting to doctor, ensures a doctor profile exists.
   Future<bool> updateUserRole(String userId, UserRole newRole) async {
     try {
       final roleString = _roleToString(newRole);
       
-      // Update the user's role in the users table
-      await _client.from('users').update({
-        'role': roleString,
-      }).eq('id', userId);
+      // ✅ SECURITY: Use RPC function for server-side super_admin validation
+      // This prevents privilege escalation attacks
+      await _client.rpc('change_user_role', params: {
+        'target_user_id': userId,
+        'new_role': roleString,
+      });
 
       // If promoting to doctor, ensure a record exists in the doctors table
       if (newRole == UserRole.doctor) {
@@ -163,9 +172,10 @@ class AdminService {
         }
       }
 
+      debugPrint('✅ User $userId role changed to $roleString');
       return true;
     } catch (e) {
-      print('Error updating user role: $e');
+      debugPrint('❌ SECURITY: Role update failed: $e');
       return false;
     }
   }

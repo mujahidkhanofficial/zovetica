@@ -225,16 +225,17 @@ class _SignUpFormState extends State<SignUpForm> {
     }
 
     try {
-      // Call Supabase signUp with additional metadata for trigger
+      // SECURITY: Only pass non-privileged data to signUp
+      // Role is set to 'pet_owner' by database trigger
+      // Doctor registration requires admin approval AFTER signup
       final response = await _authService.signUp(
           email: email, 
           password: pass,
           name: "$firstName $lastName",
           username: username,
           phone: phone,
-          role: _selectedRole == UserRole.doctor ? "doctor" : "pet_owner",
-          specialty: _selectedRole == UserRole.doctor ? _selectedSpecialty : null,
-          clinic: _selectedRole == UserRole.doctor ? clinic : null,
+          // ❌ REMOVED: role, specialty, clinic - prevents privilege escalation
+          // Doctor applicants will need to request role upgrade after signup
       );
 
       if (!mounted) return;
