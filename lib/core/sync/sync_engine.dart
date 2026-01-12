@@ -162,9 +162,10 @@ class SyncEngine {
   }
 
   /// Manually trigger sync for a specific chat
-  Future<void> syncChat(int chatId) async {
+  /// If force=true, fetches all messages ignoring lastSync timestamp
+  Future<void> syncChat(int chatId, {bool force = false}) async {
     if (!_connectivity.isOnline) return;
-    await _chatRepo.syncMessages(chatId);
+    await _chatRepo.syncMessages(chatId, force: force);
   }
 
   /// Force a full sync (call from pull-to-refresh, etc.)

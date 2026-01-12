@@ -225,79 +225,242 @@ class _SignUpFormState extends State<SignUpForm> {
     }
 
     try {
+      // Call Supabase signUp with additional metadata for trigger
       final response = await _authService.signUp(
           email: email, 
           password: pass,
           name: "$firstName $lastName",
           username: username,
-      );
-
-      if (response.user == null) {
-        throw Exception('Signup failed');
-      }
-      
-      try {
-        await _userService.createUser(
-          id: response.user!.id,
-          email: email,
-          name: "$firstName $lastName",
           phone: phone,
           role: _selectedRole == UserRole.doctor ? "doctor" : "pet_owner",
           specialty: _selectedRole == UserRole.doctor ? _selectedSpecialty : null,
           clinic: _selectedRole == UserRole.doctor ? clinic : null,
-          username: username,
-        );
-      } catch (e) {
-         if (e.toString().contains('duplicate key') || e.toString().contains('already exists')) {
-           // success (handled by trigger)
-         } else {
-            throw Exception("Could not save user data. Please try again.");
-         }
+      );
+
+      if (!mounted) return;
+
+      // ============================================================
+      // CRITICAL FIX: Handle email confirmation mode correctly
+      // ============================================================
+      // When email confirmation is ENABLED in Supabase:
+      // - response.user will be NULL (this is EXPECTED, not an error!)
+      // - response.session will be NULL (also EXPECTED!)
+      // - The user IS created in auth.users with email_confirmed_at = NULL
+      // - The verification email IS sent successfully
+      //
+      // We should NOT treat this as an error!
+      // ============================================================
+
+      // Case 1: Email confirmation is ENABLED (user/session are null)
+      // This is SUCCESS - verification email was sent
+      if (response.user == null && response.session == null) {
+        debugPrint('📧 Email confirmation mode: Verification email sent to $email');
+        
+        // Show success dialog for email verification
+        await _showEmailVerificationDialog(email);
+        return;
       }
 
-      if (!mounted) return;
+      // Case 2: Email confirmation is DISABLED (user exists immediately)
+      // Create profile right away since user is already verified
+      if (response.user != null) {
+        debugPrint('✅ Instant signup: User created with ID ${response.user!.id}');
+        
+        try {
+          await _userService.createUser(
+            id: response.user!.id,
+            email: email,
+            name: "$firstName $lastName",
+            phone: phone,
+            role: _selectedRole == UserRole.doctor ? "doctor" : "pet_owner",
+            specialty: _selectedRole == UserRole.doctor ? _selectedSpecialty : null,
+            clinic: _selectedRole == UserRole.doctor ? clinic : null,
+            username: username,
+          );
+        } catch (e) {
+          // Profile might already exist from trigger - that's fine
+          if (!e.toString().contains('duplicate key') && !e.toString().contains('already exists')) {
+            debugPrint('⚠️ Profile creation warning: $e');
+          }
+        }
 
-      // Show confirmation email dialog
-      await showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(
-            children: [
-              Icon(Icons.mark_email_read_rounded, color: AppColors.primary, size: 28),
-              const SizedBox(width: 12),
-              const Text('Check Your Email'),
-            ],
-          ),
-          content: Text(
-            'A confirmation link has been sent to $email. Please verify your email to complete registration.',
-            style: TextStyle(color: AppColors.slate, height: 1.5),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context); // Close dialog
-                widget.onSwitchToLogin();
-              },
-              child: Text('Go to Login', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
-      );
+        // Show success and redirect to login
+        await _showEmailVerificationDialog(email);
+      }
     } on AuthException catch (e) {
       if (!mounted) return;
+      debugPrint('❌ AuthException: ${e.message}');
       setState(() => _errorMessage = _getAuthErrorMessage(e));
     } on SocketException {
       if (!mounted) return;
       setState(() => _errorMessage = 'Unable to connect. Please check your internet connection.');
     } catch (e) {
       if (!mounted) return;
+      debugPrint('❌ Unexpected error: $e');
       setState(() => _errorMessage = _getGenericErrorMessage(e));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
+
+  /// Show email verification dialog
+  Future<void> _showEmailVerificationDialog(String email) async {
+    if (!mounted) return;
+    
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Container(
+          padding: const EdgeInsets.all(28),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Animated Email Icon
+              TweenAnimationBuilder(
+                duration: const Duration(milliseconds: 600),
+                tween: Tween<double>(begin: 0.0, end: 1.0),
+                builder: (context, double value, child) {
+                  return Transform.scale(
+                    scale: value,
+                    child: Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        gradient: AppGradients.primaryCta,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withAlpha(77),
+                            blurRadius: 20,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.mark_email_read_rounded,
+                        color: Colors.white,
+                        size: 48,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              
+              const SizedBox(height: 24),
+              
+              // Title
+              const Text(
+                'Check Your Email',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.charcoal,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              
+              const SizedBox(height: 12),
+              
+              // Email address
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withAlpha(26),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  email,
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              
+              const SizedBox(height: 16),
+              
+              // Description
+              Text(
+                'We\'ve sent a verification link to your email address. Please check your inbox and click the link to complete your registration.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppColors.slate,
+                  fontSize: 14,
+                  height: 1.6,
+                ),
+              ),
+              
+              const SizedBox(height: 8),
+              
+              // Spam notice
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.info_outline, color: AppColors.slate, size: 16),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Check your spam folder if not received',
+                    style: TextStyle(
+                      color: AppColors.slate,
+                      fontSize: 12,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
+              ),
+              
+              const SizedBox(height: 28),
+              
+              // Go to Login Button
+              Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  gradient: AppGradients.coralButton,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                        color: AppColors.accent.withAlpha(102),
+                      blurRadius: 12,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () {
+                      Navigator.pop(context);
+                      widget.onSwitchToLogin();
+                    },
+                    borderRadius: BorderRadius.circular(14),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      alignment: Alignment.center,
+                      child: const Text(
+                        'Go to Login',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
 
   @override
   Widget build(BuildContext context) {

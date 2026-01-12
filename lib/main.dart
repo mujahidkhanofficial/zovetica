@@ -11,6 +11,9 @@ import 'theme/app_theme.dart';
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+// Global navigator key for navigation from anywhere (e.g., notifications)
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
@@ -43,6 +46,7 @@ class ZoveticaApp extends StatelessWidget {
     ]);
 
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'Zovetica',
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,

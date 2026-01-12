@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'; // For Realtime
-import 'package:drift/drift.dart' show Value; // For DB insert
-import '../data/local/database.dart'; // AppDatabase, LocalMessagesCompanion
+import '../data/local/database.dart';
 import '../data/repositories/chat_repository.dart';
 import '../data/repositories/chat_repository_impl.dart';
 import '../core/sync/sync_engine.dart';
 import '../services/supabase_service.dart';
+import '../services/global_chat_manager.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_gradients.dart';
 import '../theme/app_spacing.dart';
@@ -37,100 +36,30 @@ class _SimpleChatScreenState extends State<SimpleChatScreen> {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
   String? _currentUserId;
-  
-  // Realtime subscription for instant message updates
-  RealtimeChannel? _messagesSubscription;
 
   @override
   void initState() {
     super.initState();
     _currentUserId = SupabaseService.currentUser?.id;
+    
     // Trigger background sync for this chat
     SyncEngine.instance.syncChat(widget.chatId);
-    // Setup realtime subscription for instant updates
-    _setupRealtimeSubscription();
+    
+    // Mark this chat as active in GlobalChatManager (no badge increments)
+    GlobalChatManager.instance.setActiveChat(widget.chatId);
+    
+    // Mark chat as read
+    GlobalChatManager.instance.markChatAsRead(widget.chatId);
   }
 
   @override
   void dispose() {
-    // Clean up realtime subscription
-    if (_messagesSubscription != null) {
-      SupabaseService.client.removeChannel(_messagesSubscription!);
-    }
+    // Clear active chat when leaving
+    GlobalChatManager.instance.setActiveChat(null);
+    
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
-  }
-
-  /// Setup Supabase Realtime subscription for this chat's messages
-  void _setupRealtimeSubscription() {
-    debugPrint('🔌 Setting up Realtime for Chat: ${widget.chatId}');
-
-    _messagesSubscription = SupabaseService.client
-        .channel('public:messages:chat:${widget.chatId}')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert, // Listen for new messages
-          schema: 'public',
-          table: 'messages',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'chat_id',
-            value: widget.chatId,
-          ),
-          callback: (payload) {
-            debugPrint('🔴 REALTIME: New message received!');
-            final newRecord = payload.newRecord;
-            
-            if (newRecord != null) {
-              final senderId = newRecord['sender_id'] as String?;
-              
-              // Only insert if message is from the other person (not me)
-              if (senderId != null && senderId != _currentUserId) {
-                debugPrint('✅ Message from friend - inserting directly...');
-                
-                // Direct insert into local DB (bypasses delta sync issue)
-                _insertRemoteMessage(newRecord);
-              }
-            }
-          },
-        )
-        .subscribe((status, [error]) {
-          if (status == RealtimeSubscribeStatus.subscribed) {
-            debugPrint('✅ Chat Realtime Connected!');
-          } else if (status == RealtimeSubscribeStatus.closed || 
-                     status == RealtimeSubscribeStatus.timedOut) {
-            debugPrint('❌ Chat Realtime Disconnected: $error');
-          }
-        });
-  }
-
-  /// Insert a message received from realtime directly into local DB
-  Future<void> _insertRemoteMessage(Map<String, dynamic> msgData) async {
-    try {
-      final db = AppDatabase.instance;
-      
-      await db.into(db.localMessages).insertOnConflictUpdate(
-        LocalMessagesCompanion(
-          remoteId: Value(msgData['id'] as int),
-          chatId: Value(widget.chatId),
-          senderId: Value(msgData['sender_id'] as String),
-          content: Value(msgData['content'] as String),
-          createdAt: Value(DateTime.parse(msgData['created_at'] as String)),
-          editedAt: Value(msgData['edited_at'] != null 
-              ? DateTime.parse(msgData['edited_at'] as String) 
-              : null),
-          syncStatus: const Value('synced'),
-          syncedAt: Value(DateTime.now()),
-          isDeleted: const Value(false),
-        ),
-      );
-      
-      debugPrint('✅ Message inserted directly into local DB!');
-    } catch (e) {
-      debugPrint('❌ Failed to insert realtime message: $e');
-      // Fallback to sync
-      SyncEngine.instance.syncChat(widget.chatId);
-    }
   }
 
 

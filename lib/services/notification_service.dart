@@ -4,6 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'auth_service.dart';
+import '../main.dart' show navigatorKey;
+import '../utils/notification_router.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._();
@@ -43,6 +45,10 @@ class NotificationService {
       initializationSettings,
       onDidReceiveNotificationResponse: (NotificationResponse details) {
         debugPrint('🔔 Notification tapped: ${details.payload}');
+        final context = navigatorKey.currentContext;
+        if (context != null && details.payload != null) {
+          NotificationRouter.handleNotificationTap(context, details.payload);
+        }
       },
     );
 
@@ -108,15 +114,15 @@ class NotificationService {
   // SCHEDULED NOTIFICATION METHODS
   // ============================================
 
-  /// Schedule a reminder notification 24 hours before the appointment
+  /// Schedule a reminder notification 1 hour before the appointment
   Future<void> scheduleAppointmentReminder({
     required String appointmentId,
     required DateTime appointmentDateTime,
     required String doctorName,
     required String petName,
   }) async {
-    // Calculate 24 hours before appointment
-    final reminderTime = appointmentDateTime.subtract(const Duration(hours: 24));
+    // Calculate 1 hour before appointment
+    final reminderTime = appointmentDateTime.subtract(const Duration(hours: 1));
     
     // Don't schedule if reminder time has already passed
     if (reminderTime.isBefore(DateTime.now())) {
@@ -146,15 +152,15 @@ class NotificationService {
 
     await _notificationsPlugin.zonedSchedule(
       notificationId,
-      'Appointment Tomorrow! 🏥',
-      'Your appointment with Dr. $doctorName for $petName is tomorrow at ${_formatTime(appointmentDateTime)}',
+      'Appointment in 1 Hour! ⏰',
+      'Your appointment with Dr. $doctorName for $petName is at ${_formatTime(appointmentDateTime)}',
       tzReminderTime,
       notificationDetails,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      payload: 'appointment:$appointmentId',
+      payload: 'appointment_reminder:$appointmentId',
     );
 
-    debugPrint('✅ Scheduled reminder for ${appointmentDateTime.toIso8601String()} (24h before)');
+    debugPrint('✅ Scheduled 1-hour reminder for ${appointmentDateTime.toIso8601String()}');
   }
 
   /// Cancel a scheduled reminder
@@ -212,7 +218,18 @@ class NotificationService {
         .eq('user_id', userId);
   }
 
-  /// Create notification (Server side usually, but client might trigger it)
+  // ============================================
+  // NOTIFICATION TYPE CONSTANTS
+  // ============================================
+  static const String typeMessage = 'message';
+  static const String typeAppointmentAccepted = 'appointment_accepted';
+  static const String typeAppointmentRejected = 'appointment_rejected';
+  static const String typeAppointmentRescheduled = 'appointment_rescheduled';
+  static const String typeAppointmentReminder = 'appointment_reminder';
+  static const String typeCommunityLike = 'community_like';
+  static const String typeCommunityComment = 'community_comment';
+
+  /// Create notification (stores in DB AND shows local push notification)
   Future<void> createNotification({
     required String userId,
     required String title,
@@ -220,16 +237,41 @@ class NotificationService {
     required String type,
     dynamic relatedId,
     String? actorId,
+    bool showLocalPush = true,
   }) async {
-    await _client.from('notifications').insert({
-      'user_id': userId,
-      'title': title,
-      'body': body,
-      'type': type,
-      'related_id': relatedId,
-      'actor_id': actorId,
-      'is_read': false,
-    });
+    try {
+      // 1. Store in Supabase for persistence and history
+      await _client.from('notifications').insert({
+        'user_id': userId,
+        'title': title,
+        'body': body,
+        'type': type,
+        'related_id': relatedId?.toString(),
+        'actor_id': actorId,
+        'is_read': false,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+      
+      debugPrint('📝 Notification saved to DB: type=$type, user=$userId');
+      
+      // 2. Show local push notification if enabled (only for recipient, not sender)
+      // The push will only show if the recipient's device is receiving this call
+      // For cross-device push, FCM would be needed
+      if (showLocalPush && userId == _authService.currentUser?.id) {
+        // This will only work if this is the recipient's device running this code
+        // Typically, this would be called via a Supabase Edge Function + FCM
+        // For now, we rely on real-time listeners to show notifications
+        await showNotification(
+          id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+          title: title,
+          body: body,
+          payload: '$type:$relatedId',
+        );
+        debugPrint('📱 Local push notification shown');
+      }
+    } catch (e) {
+      debugPrint('❌ Error creating notification: $e');
+    }
   }
 
   /// Get unread count stream
@@ -244,6 +286,96 @@ class NotificationService {
         .stream(primaryKey: ['id'])
         .eq('user_id', userId)
         .map((data) => data.where((n) => n['is_read'] == false).length);
+  }
+
+  RealtimeChannel? _notificationChannel;
+
+  /// Start listening for real-time notifications and show push notifications
+  /// Call this on app startup after user is authenticated
+  void startNotificationListener() {
+    final userId = _authService.currentUser?.id;
+    if (userId == null) return;
+
+    // Cancel any existing subscription
+    _notificationChannel?.unsubscribe();
+
+    _notificationChannel = _client
+        .channel('notifications:$userId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'notifications',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: userId,
+          ),
+          callback: (payload) async {
+            final newNotification = payload.newRecord;
+            if (newNotification != null) {
+              final title = newNotification['title'] ?? 'Zovetica';
+              final body = newNotification['body'] ?? 'You have a new notification';
+              final type = newNotification['type'] ?? '';
+              final relatedId = newNotification['related_id'];
+              
+              debugPrint('🔔 Real-time notification received: $title - $body');
+              
+              // Show local push notification
+              await showNotification(
+                id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+                title: title,
+                body: body,
+                payload: '$type:$relatedId',
+              );
+            }
+          },
+        )
+        .subscribe();
+    
+    debugPrint('📡 Notification listener started for user: $userId');
+  }
+
+  /// Stop the notification listener (call on logout)
+  void stopNotificationListener() {
+    _notificationChannel?.unsubscribe();
+    _notificationChannel = null;
+    debugPrint('📡 Notification listener stopped');
+  }
+
+  /// Get unread message count specifically
+  Future<int> getUnreadMessageCount() async {
+    final userId = _authService.currentUser?.id;
+    if (userId == null) return 0;
+    
+    try {
+      final response = await _client
+          .from('notifications')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('type', typeMessage)
+          .eq('is_read', false);
+      return (response as List).length;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  /// Get unread count by type
+  Future<int> getUnreadCountByType(String type) async {
+    final userId = _authService.currentUser?.id;
+    if (userId == null) return 0;
+    
+    try {
+      final response = await _client
+          .from('notifications')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('type', type)
+          .eq('is_read', false);
+      return (response as List).length;
+    } catch (e) {
+      return 0;
+    }
   }
 }
 

@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase_service.dart';
+import 'notification_service.dart';
+import 'user_service.dart';
 import '../models/app_models.dart';
 
 /// Appointment service for booking and management
 class AppointmentService {
   final _client = SupabaseService.client;
+  final _notificationService = NotificationService();
+  final _userService = UserService();
   static const String _tableName = 'appointments';
   static const String _slotsTable = 'availability_slots';
 
@@ -27,7 +31,8 @@ class AppointmentService {
       finalDoctorId = resolvedId;
     }
 
-    await _client.from(_tableName).insert({
+    // Insert and return the appointment ID
+    final response = await _client.from(_tableName).insert({
       'user_id': userId,
       'doctor_id': finalDoctorId,
       'pet_id': petId,
@@ -35,7 +40,75 @@ class AppointmentService {
       'time': time,
       'type': type,
       'status': 'pending',
-    });
+    }).select('id').single();
+    
+    final appointmentId = response['id']?.toString();
+
+    // Send notification to doctor about new appointment request
+    await _sendAppointmentNotification(
+      appointmentData: {
+        'id': appointmentId,
+        'doctor_id': finalDoctorId,
+        'user_id': userId,
+        'date': date.toIso8601String().split('T')[0],
+        'time': time,
+      },
+      status: 'new_request',
+    );
+    
+    // Schedule 1-hour reminder (will fail gracefully if past)
+    if (appointmentId != null) {
+      try {
+        // Get doctor and pet names for reminder
+        final doctorData = await _client
+            .from('doctors')
+            .select('users(name)')
+            .eq('id', finalDoctorId)
+            .maybeSingle();
+        final petData = await _client
+            .from('pets')
+            .select('name')
+            .eq('id', petId)
+            .maybeSingle();
+        
+        final doctorName = doctorData?['users']?['name'] ?? 'Doctor';
+        final petName = petData?['name'] ?? 'Pet';
+        
+        // Parse appointment date/time
+        final appointmentDateTime = _parseAppointmentDateTime(date, time);
+        
+        await _notificationService.scheduleAppointmentReminder(
+          appointmentId: appointmentId,
+          appointmentDateTime: appointmentDateTime,
+          doctorName: doctorName,
+          petName: petName,
+        );
+      } catch (e) {
+        debugPrint('⚠️ Failed to schedule reminder: $e');
+      }
+    }
+  }
+  
+  /// Parse appointment date and time into DateTime
+  DateTime _parseAppointmentDateTime(DateTime date, String time) {
+    final timeParts = time.split(':');
+    var hour = int.parse(timeParts[0]);
+    final minute = int.parse(timeParts[1].split(' ')[0]);
+    
+    // Handle AM/PM if present
+    if (time.toUpperCase().contains('PM') && hour < 12) {
+      hour += 12;
+    } else if (time.toUpperCase().contains('AM') && hour == 12) {
+      hour = 0;
+    }
+    
+    return DateTime(
+      date.year,
+      date.month,
+      date.day,
+      hour,
+      minute,
+    );
   }
 
   /// Get appointments for current user (pet owner)
@@ -198,15 +271,137 @@ class AppointmentService {
     }).toList();
   }
 
-  /// Update appointment status
+  /// Update appointment status with notification
   Future<void> updateAppointmentStatus({
     required String appointmentId,
     required String status,
+    String? rejectionReason,
   }) async {
+    // 1. Fetch appointment details first
+    final appointmentData = await _client
+        .from(_tableName)
+        .select()
+        .eq('id', appointmentId)
+        .maybeSingle();
+    
+    if (appointmentData == null) {
+      throw Exception('Appointment not found');
+    }
+
+    // 2. Update the status
     await _client
         .from(_tableName)
         .update({'status': status})
         .eq('id', appointmentId);
+
+    // 3. Send notification to appropriate user
+    await _sendAppointmentNotification(
+      appointmentData: appointmentData,
+      status: status,
+      rejectionReason: rejectionReason,
+    );
+  }
+
+  /// Send appointment notification based on status change
+  Future<void> _sendAppointmentNotification({
+    required Map<String, dynamic> appointmentData,
+    required String status,
+    String? rejectionReason,
+  }) async {
+    try {
+      final petOwnerId = appointmentData['user_id'] as String?;
+      final doctorTableId = appointmentData['doctor_id'] as String?;
+      final dateStr = appointmentData['date'] ?? '';
+      final timeStr = appointmentData['time'] ?? '';
+      
+      if (petOwnerId == null) return;
+
+      // Get current user (the one making the action)
+      final currentUserId = SupabaseService.currentUser?.id;
+      final currentUserData = await _userService.getCurrentUser();
+      final currentUserName = currentUserData?['name'] ?? 'User';
+
+      // Determine recipient and notification content based on status
+      String? recipientId;
+      String title = '';
+      String body = '';
+      String notificationType = '';
+
+      switch (status) {
+        case 'accepted':
+          // Doctor accepted -> notify pet owner
+          recipientId = petOwnerId;
+          title = 'Appointment Accepted! ✅';
+          body = 'Dr. $currentUserName has accepted your appointment for $dateStr at $timeStr';
+          notificationType = NotificationService.typeAppointmentAccepted;
+          break;
+          
+        case 'rejected':
+          // Doctor rejected -> notify pet owner
+          recipientId = petOwnerId;
+          title = 'Appointment Declined ❌';
+          final reason = rejectionReason ?? 'Schedule conflict';
+          body = 'Dr. $currentUserName has declined your appointment. Reason: $reason';
+          notificationType = NotificationService.typeAppointmentRejected;
+          break;
+          
+        case 'rescheduled_pending':
+          // Doctor rescheduled -> notify pet owner
+          recipientId = petOwnerId;
+          title = 'Appointment Rescheduled 📅';
+          body = 'Dr. $currentUserName has rescheduled your appointment to $dateStr at $timeStr';
+          notificationType = NotificationService.typeAppointmentRescheduled;
+          break;
+          
+        case 'cancelled':
+          // Pet owner cancelled -> notify doctor
+          if (currentUserId == petOwnerId && doctorTableId != null) {
+            // Get doctor's user_id from doctors table
+            final doctorData = await _client
+                .from('doctors')
+                .select('user_id')
+                .eq('id', doctorTableId)
+                .maybeSingle();
+            recipientId = doctorData?['user_id'];
+            title = 'Appointment Cancelled';
+            body = '$currentUserName has cancelled the appointment for $dateStr at $timeStr';
+            notificationType = 'appointment_cancelled';
+          }
+          break;
+          
+        case 'new_request':
+          // Pet owner booked -> notify doctor
+          if (doctorTableId != null) {
+            final doctorData = await _client
+                .from('doctors')
+                .select('user_id')
+                .eq('id', doctorTableId)
+                .maybeSingle();
+            recipientId = doctorData?['user_id'];
+            title = 'New Appointment Request 🗓️';
+            body = '$currentUserName has requested an appointment for $dateStr at $timeStr';
+            notificationType = 'appointment_request';
+          }
+          break;
+          
+        default:
+          return; // Don't send notification for other statuses
+      }
+
+      if (recipientId != null && recipientId != currentUserId && title.isNotEmpty) {
+        await _notificationService.createNotification(
+          userId: recipientId,
+          title: title,
+          body: body,
+          type: notificationType,
+          relatedId: appointmentData['id']?.toString(),
+          actorId: currentUserId,
+        );
+        debugPrint('📬 Appointment notification sent: $status -> $recipientId');
+      }
+    } catch (e) {
+      debugPrint('Error sending appointment notification: $e');
+    }
   }
 
   /// Cancel appointment
@@ -215,6 +410,9 @@ class AppointmentService {
       appointmentId: appointmentId,
       status: 'cancelled',
     );
+    
+    // Cancel the scheduled reminder
+    await _notificationService.cancelAppointmentReminder(appointmentId);
   }
 
   /// Reschedule appointment (update date and time)
@@ -225,6 +423,14 @@ class AppointmentService {
     required String newTime,
     String newStatus = 'rescheduled_pending',  // Default for backward compatibility
   }) async {
+    // 1. Fetch appointment details first
+    final appointmentData = await _client
+        .from(_tableName)
+        .select('*, pets(*), doctors!appointments_doctor_id_fkey(*, users(*))')
+        .eq('id', appointmentId)
+        .maybeSingle();
+
+    // 2. Update the appointment
     await _client
         .from(_tableName)
         .update({
@@ -233,6 +439,45 @@ class AppointmentService {
           'status': newStatus,
         })
         .eq('id', appointmentId);
+
+    // 3. Send notification with updated date/time
+    if (appointmentData != null) {
+      final updatedData = Map<String, dynamic>.from(appointmentData);
+      updatedData['date'] = newDate;
+      updatedData['time'] = newTime;
+      
+      await _sendAppointmentNotification(
+        appointmentData: updatedData,
+        status: newStatus,
+      );
+      
+      // 4. Reschedule the reminder
+      try {
+        // Cancel old reminder
+        await _notificationService.cancelAppointmentReminder(appointmentId);
+        
+        // Schedule new reminder with updated date/time
+        final doctorData = appointmentData['doctors'] ?? {};
+        final userData = doctorData['users'] ?? {};
+        final petData = appointmentData['pets'] ?? {};
+        
+        final doctorName = userData['name'] ?? 'Doctor';
+        final petName = petData['name'] ?? 'Pet';
+        
+        // Parse new appointment date/time
+        final dateObj = DateTime.parse(newDate);
+        final appointmentDateTime = _parseAppointmentDateTime(dateObj, newTime);
+        
+        await _notificationService.scheduleAppointmentReminder(
+          appointmentId: appointmentId,
+          appointmentDateTime: appointmentDateTime,
+          doctorName: doctorName,
+          petName: petName,
+        );
+      } catch (e) {
+        debugPrint('⚠️ Failed to reschedule reminder: $e');
+      }
+    }
   }
 
   /// Helper: Get the doctor table ID from the user ID

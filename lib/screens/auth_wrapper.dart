@@ -93,15 +93,81 @@ class _AuthWrapperState extends State<AuthWrapper> {
       }
     }
 
-    // 3. Listen for future changes
-    SupabaseService.client.auth.onAuthStateChange.listen((data) {
+    // 3. Listen for future changes including email verification
+    SupabaseService.client.auth.onAuthStateChange.listen((data) async {
       if (!mounted) return;
-      if (data.event == AuthChangeEvent.signedIn || data.event == AuthChangeEvent.signedOut) {
-         if (data.session != _session) {
-            _reloadUser(data.session);
-         }
+      
+      debugPrint('🔐 Auth event: ${data.event}');
+      
+      // Handle sign in (including post-email-verification)
+      if (data.event == AuthChangeEvent.signedIn && data.session != null) {
+        // User just signed in (could be login OR email verification completion)
+        await _handleUserSignedIn(data.session!);
+      }
+      
+      // Handle sign out
+      if (data.event == AuthChangeEvent.signedOut) {
+        if (mounted) {
+          setState(() {
+            _session = null;
+            _userRole = null;
+            _isLoading = false;
+          });
+        }
+      }
+      
+      // Handle token refresh (user might have verified email)
+      if (data.event == AuthChangeEvent.tokenRefreshed && data.session != null) {
+        await _reloadUser(data.session);
       }
     });
+  }
+
+  /// Handle user signed in event (login or post-email-verification)
+  Future<void> _handleUserSignedIn(Session session) async {
+    debugPrint('👤 User signed in: ${session.user.email}');
+    
+    setState(() => _isLoading = true);
+    
+    try {
+      // Check if profile exists in public.users
+      final existingUser = await _userService.getUserById(session.user.id);
+      
+      if (existingUser == null) {
+        // Profile doesn't exist - create it from auth metadata
+        // This happens after email verification when email confirmation is enabled
+        debugPrint('📝 Creating profile for newly verified user');
+        
+        final metadata = session.user.userMetadata ?? {};
+        try {
+          await SupabaseService.client.from('users').upsert({
+            'id': session.user.id,
+            'email': session.user.email,
+            'name': metadata['full_name'] ?? 'User',
+            'username': metadata['username'],
+            'phone': metadata['phone'],
+            'role': metadata['role'] ?? 'pet_owner',
+            'specialty': metadata['specialty'],
+            'clinic': metadata['clinic'],
+          });
+          debugPrint('✅ Profile created successfully');
+        } catch (e) {
+          debugPrint('⚠️ Profile creation error (might already exist): $e');
+        }
+      }
+      
+      // Reload user data
+      await _reloadUser(session);
+    } catch (e) {
+      debugPrint('❌ Error handling sign in: $e');
+      if (mounted) {
+        setState(() {
+          _session = session;
+          _userRole = 'pet_owner';
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   Future<void> _reloadUser(Session? session) async {

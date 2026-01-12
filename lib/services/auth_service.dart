@@ -14,42 +14,41 @@ class AuthService {
   bool get isLoggedIn => currentUser != null;
 
   /// Sign up with email and password
+  /// 
+  /// IMPORTANT: When email confirmation is ENABLED in Supabase:
+  /// - The returned [AuthResponse.user] will be NULL (this is expected!)
+  /// - The returned [AuthResponse.session] will be NULL (also expected!)
+  /// - The user IS created in auth.users with email_confirmed_at = NULL
+  /// - A verification email IS sent to the user
+  /// 
+  /// Callers should NOT treat user==null as failure when email confirmation is enabled.
   Future<AuthResponse> signUp({
     required String email,
     required String password,
     required String name,
     required String username,
+    String? phone,
+    String? role,
+    String? specialty,
+    String? clinic,
   }) async {
     final response = await _client.auth.signUp(
       email: email,
       password: password,
+      emailRedirectTo: 'io.supabase.zovetica://login-callback',
       data: {
         'full_name': name,
         'username': username,
+        'phone': phone,
+        'role': role ?? 'pet_owner',
+        'specialty': specialty,
+        'clinic': clinic,
       },
     );
     
-    // Also explicitly insert into public.users if a trigger doesn't do it.
-    // Assuming backend trigger handles sync from auth.users to public.users?
-    // If not, we should do it here. 
-    // Standard Zovetica pattern: triggers do it. 
-    // BUT we need to ensure 'username' gets to public.users.
-    // If the trigger copies ALL specific metadata fields, we are good.
-    // If not, we might need a manual update.
-    // Let's assume trigger copies 'username' if present in metadata, OR we update manually.
-    
-    // Safer approach: manual upsert to public.users after signup (if trigger isn't perfect)
-    /*
-    if (response.user != null) {
-       await _client.from('users').upsert({
-         'id': response.user!.id,
-         'email': email,
-         'name': name,
-         'username': username,
-         'role': 'pet_owner',
-       });
-    }
-    */
+    // The response.user may be null when email confirmation is enabled.
+    // This is EXPECTED behavior, not an error.
+    // The trigger in Supabase will create the profile when email is verified.
     
     return response;
   }

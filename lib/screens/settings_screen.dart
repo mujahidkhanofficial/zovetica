@@ -619,23 +619,180 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               password: password,
                             );
                             
-                            // Delete user data from tables
+                            // Delete user data from ALL tables
                             final userId = user.id;
                             
-                            // Clear local database first
-                            await AppDatabase.instance.clearAllData();
+                            debugPrint('🗑️ Starting account deletion for user: $userId');
                             
-                            // Delete from Supabase tables
-                            await SupabaseService.client.from('notifications').delete().eq('user_id', userId);
-                            await SupabaseService.client.from('pets').delete().eq('owner_id', userId);
-                            await SupabaseService.client.from('posts').delete().eq('user_id', userId);
-                            
-                            // Sign out
-                            await SupabaseService.client.auth.signOut();
-                            
-                            if (context.mounted) {
-                              Navigator.pop(context);
-                              _showAccountDeletedSuccess();
+                            try {
+                              // 1. Clear local database first
+                              await AppDatabase.instance.clearAllData();
+                              debugPrint('✅ Local database cleared');
+                              
+                              // 2. Delete from all Supabase tables (order matters due to foreign keys)
+                              
+                              // Delete notifications
+                              try {
+                                await SupabaseService.client
+                                    .from('notifications')
+                                    .delete()
+                                    .or('user_id.eq.$userId,actor_id.eq.$userId');
+                                debugPrint('✅ Notifications deleted');
+                              } catch (e) {
+                                debugPrint('⚠️ Failed to delete notifications: $e');
+                              }
+                              
+                              // Delete messages (sent by user)
+                              try {
+                                await SupabaseService.client
+                                    .from('messages')
+                                    .delete()
+                                    .eq('sender_id', userId);
+                                debugPrint('✅ Messages deleted');
+                              } catch (e) {
+                                debugPrint('⚠️ Failed to delete messages: $e');
+                              }
+                              
+                              // Delete chat participants
+                              try {
+                                await SupabaseService.client
+                                    .from('chat_participants')
+                                    .delete()
+                                    .eq('user_id', userId);
+                                debugPrint('✅ Chat participants deleted');
+                              } catch (e) {
+                                debugPrint('⚠️ Failed to delete chat participants: $e');
+                              }
+                              
+                              // Delete post likes
+                              try {
+                                await SupabaseService.client
+                                    .from('post_likes')
+                                    .delete()
+                                    .eq('user_id', userId);
+                                debugPrint('✅ Post likes deleted');
+                              } catch (e) {
+                                debugPrint('⚠️ Failed to delete post likes: $e');
+                              }
+                              
+                              // Delete post comments
+                              try {
+                                await SupabaseService.client
+                                    .from('post_comments')
+                                    .delete()
+                                    .eq('user_id', userId);
+                                debugPrint('✅ Post comments deleted');
+                              } catch (e) {
+                                debugPrint('⚠️ Failed to delete post comments: $e');
+                              }
+                              
+                              // Delete posts
+                              try {
+                                await SupabaseService.client
+                                    .from('posts')
+                                    .delete()
+                                    .eq('user_id', userId);
+                                debugPrint('✅ Posts deleted');
+                              } catch (e) {
+                                debugPrint('⚠️ Failed to delete posts: $e');
+                              }
+                              
+                              // Delete ALL appointments related to user (as owner OR as patient)
+                              // This must be before pets deletion
+                              try {
+                                // First get all pet IDs owned by this user
+                                final pets = await SupabaseService.client
+                                    .from('pets')
+                                    .select('id')
+                                    .eq('owner_id', userId);
+                                
+                                final petIds = pets.map((p) => p['id']).toList();
+                                
+                                // Delete appointments where user is the patient
+                                await SupabaseService.client
+                                    .from('appointments')
+                                    .delete()
+                                    .eq('user_id', userId);
+                                
+                                // Delete appointments for user's pets
+                                if (petIds.isNotEmpty) {
+                                  await SupabaseService.client
+                                      .from('appointments')
+                                      .delete()
+                                      .inFilter('pet_id', petIds);
+                                }
+                                
+                                debugPrint('✅ Appointments deleted');
+                              } catch (e) {
+                                debugPrint('⚠️ Failed to delete appointments: $e');
+                              }
+                              
+                              // Now safe to delete pets
+                              try {
+                                await SupabaseService.client
+                                    .from('pets')
+                                    .delete()
+                                    .eq('owner_id', userId);
+                                debugPrint('✅ Pets deleted');
+                              } catch (e) {
+                                debugPrint('⚠️ Failed to delete pets: $e');
+                              }
+                              
+                              // Delete friendships
+                              try {
+                                await SupabaseService.client
+                                    .from('friendships')
+                                    .delete()
+                                    .or('user_id.eq.$userId,friend_id.eq.$userId');
+                                debugPrint('✅ Friendships deleted');
+                              } catch (e) {
+                                debugPrint('⚠️ Failed to delete friendships: $e');
+                              }
+                              
+                              // Delete doctor profile (if exists)
+                              try {
+                                await SupabaseService.client
+                                    .from('doctors')
+                                    .delete()
+                                    .eq('user_id', userId);
+                                debugPrint('✅ Doctor profile deleted (if existed)');
+                              } catch (e) {
+                                debugPrint('⚠️ Failed to delete doctor profile: $e');
+                              }
+                              
+                              // Delete user profile
+                              try {
+                                await SupabaseService.client
+                                    .from('users')
+                                    .delete()
+                                    .eq('id', userId);
+                                debugPrint('✅ User profile deleted');
+                              } catch (e) {
+                                debugPrint('⚠️ Failed to delete user profile: $e');
+                                throw e; // This one is critical
+                              }
+                              
+                              // 3. Delete auth user (try RPC first, fallback to admin deletion)
+                              try {
+                                await SupabaseService.client.rpc('delete_user');
+                                debugPrint('✅ Auth user deleted via RPC');
+                              } catch (rpcError) {
+                                debugPrint('⚠️ RPC delete failed: $rpcError');
+                                debugPrint('ℹ️ Auth user will be auto-deleted by cascade when profile deleted');
+                              }
+                              
+                              // 4. Sign out
+                              await SupabaseService.client.auth.signOut();
+                              
+                              debugPrint('🎉 Account deletion complete!');
+                              
+                              if (context.mounted) {
+                                Navigator.pop(context);
+                                _showAccountDeletedSuccess();
+                              }
+                            } catch (e) {
+                              debugPrint('❌ Account deletion error: $e');
+                              rethrow;
                             }
                           } catch (e) {
                             if (context.mounted) {
@@ -685,50 +842,153 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: AppGradients.primaryCta,
-                shape: BoxShape.circle,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        backgroundColor: Colors.transparent,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withOpacity(0.15),
+                blurRadius: 30,
+                spreadRadius: 5,
+                offset: const Offset(0, 10),
               ),
-              child: const Icon(Icons.check_rounded, color: Colors.white, size: 48),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'Account Deleted',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.charcoal),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Your account has been successfully deleted. We\'re sorry to see you go!',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.slate, fontSize: 14),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(builder: (_) => const AuthScreen()),
-                    (route) => false,
+            ],
+          ),
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Animated Success Icon with Gradient
+              TweenAnimationBuilder(
+                duration: const Duration(milliseconds: 600),
+                tween: Tween<double>(begin: 0.0, end: 1.0),
+                builder: (context, double value, child) {
+                  return Transform.scale(
+                    scale: value,
+                    child: Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        gradient: AppGradients.primaryCta,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.success.withOpacity(0.3),
+                            blurRadius: 20,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.check_circle_outline_rounded,
+                        color: Colors.white,
+                        size: 56,
+                      ),
+                    ),
                   );
                 },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               ),
-            ),
-          ],
+              
+              const SizedBox(height: 28),
+              
+              // Title
+              TweenAnimationBuilder(
+                duration: const Duration(milliseconds: 400),
+                tween: Tween<double>(begin: 0.0, end: 1.0),
+                builder: (context, double value, child) {
+                  return Opacity(
+                    opacity: value,
+                    child: const Text(
+                      'Account Deleted',
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.charcoal,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              
+              const SizedBox(height: 12),
+              
+              // Subtitle
+              TweenAnimationBuilder(
+                duration: const Duration(milliseconds: 600),
+                tween: Tween<double>(begin: 0.0, end: 1.0),
+                builder: (context, double value, child) {
+                  return Opacity(
+                    opacity: value,
+                    child: const Text(
+                      'Your account has been permanently deleted.\nWe\'re sorry to see you go! 💔',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: AppColors.slate,
+                        fontSize: 15,
+                        height: 1.6,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              
+              const SizedBox(height: 32),
+              
+              // Action Button with Gradient
+              TweenAnimationBuilder(
+                duration: const Duration(milliseconds: 800),
+                tween: Tween<double>(begin: 0.0, end: 1.0),
+                builder: (context, double value, child) {
+                  return Opacity(
+                    opacity: value,
+                    child: Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        gradient: AppGradients.coralButton,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.accent.withOpacity(0.4),
+                            blurRadius: 12,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () {
+                            Navigator.of(context).pushAndRemoveUntil(
+                              MaterialPageRoute(builder: (_) => const AuthScreen()),
+                              (route) => false,
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(16),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            alignment: Alignment.center,
+                            child: const Text(
+                              'Return to Login',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 17,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );

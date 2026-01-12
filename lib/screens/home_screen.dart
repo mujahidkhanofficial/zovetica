@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:zovetica/services/supabase_service.dart';
+import 'package:zovetica/services/notification_service.dart';
+import 'package:zovetica/services/global_chat_manager.dart';
+import 'package:zovetica/widgets/badge_widget.dart';
 import 'package:zovetica/services/user_service.dart';
 import 'package:zovetica/services/auth_service.dart';
 import '../data/repositories/user_repository.dart';
@@ -69,7 +72,14 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _fetchUser();
     _fetchPets();
-    _setupUserSubscription(); // Added call here
+    _setupUserSubscription();
+    
+    // Start notification listener for real-time push notifications
+    NotificationService().startNotificationListener();
+    
+    // Initialize GlobalChatManager for real-time chat
+    _initializeGlobalChat();
+    
     _screens.addAll([
       const SizedBox(), // Placeholder for Home
       const FindDoctorScreen(),
@@ -177,13 +187,28 @@ class _HomeScreenState extends State<HomeScreen> {
         )
         .subscribe();
   }
-
+  
+  Future<void> _initializeGlobalChat() async {
+    try {
+      final userId = _authService.currentUser?.id;
+      if (userId != null) {
+        await GlobalChatManager.instance.initialize(userId);
+        debugPrint('✅ GlobalChatManager initialized');
+      }
+    } catch (e) {
+      debugPrint('⚠️ Failed to initialize GlobalChatManager: $e');
+    }
+  }
 
   @override
   void dispose() {
     if (_userSubscription != null) {
       SupabaseService.client.removeChannel(_userSubscription!);
     }
+    // Stop notification listener on logout/dispose
+    NotificationService().stopNotificationListener();
+    // Dispose GlobalChatManager
+    GlobalChatManager.instance.dispose();
     super.dispose();
   }
 
@@ -771,12 +796,63 @@ class _HomeScreenState extends State<HomeScreen> {
               _buildNavItem(Icons.home_rounded, Icons.home_outlined, 'Home'),
               _buildNavItem(Icons.search_rounded, Icons.search_outlined, 'Find Vet'),
               _buildNavItem(Icons.calendar_month_rounded, Icons.calendar_today_outlined, 'Bookings'),
-              _buildNavItem(Icons.chat_bubble_rounded, Icons.chat_bubble_outline, 'Messages'),
+              _buildNavItemWithBadge(
+                Icons.chat_bubble_rounded, 
+                Icons.chat_bubble_outline, 
+                'Messages',
+                NotificationService().getUnreadCountStream(),
+              ),
               _buildNavItem(Icons.person_rounded, Icons.person_outline, 'Profile'),
             ],
           ),
         ),
       ),
+    );
+  }
+  
+  BottomNavigationBarItem _buildNavItemWithBadge(
+    IconData active, 
+    IconData inactive, 
+    String label,
+    Stream<int> badgeCountStream,
+  ) {
+    return BottomNavigationBarItem(
+      icon: Padding(
+        padding: const EdgeInsets.only(bottom: 4.0),
+        child: StreamBuilder<int>(
+          stream: badgeCountStream,
+          initialData: 0,
+          builder: (context, snapshot) {
+            final count = snapshot.data ?? 0;
+            return BadgeWidget(
+              count: count,
+              child: Icon(inactive, size: 24),
+            );
+          },
+        ),
+      ),
+      activeIcon: Padding(
+        padding: const EdgeInsets.only(bottom: 4.0),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppColors.primary.withAlpha(26),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          child: StreamBuilder<int>(
+            stream: badgeCountStream,
+            initialData: 0,
+            builder: (context, snapshot) {
+              final count = snapshot.data ?? 0;
+              return BadgeWidget(
+                count: count,
+                child: Icon(active, size: 24),
+              );
+            },
+          ),
+        ),
+      ),
+      label: label,
     );
   }
   

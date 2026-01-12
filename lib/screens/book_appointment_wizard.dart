@@ -962,28 +962,13 @@ class _BookAppointmentWizardState extends State<BookAppointmentWizard>
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${_selectedType.durationMinutes} min • ${_selectedType.formattedPrice}',
+                  '30 minutes',
                   style: TextStyle(
                     fontSize: 13,
                     color: AppColors.slate,
                   ),
                 ),
               ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppColors.secondary.withAlpha(30),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              _selectedType.formattedPrice,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-                color: AppColors.secondaryDark,
-              ),
             ),
           ),
         ],
@@ -1124,7 +1109,6 @@ class _BookAppointmentWizardState extends State<BookAppointmentWizard>
   // ============ STEP 4: CONFIRMATION ============
   Widget _buildStep4Confirmation() {
     final selectedPets = _myPets.where((p) => _selectedPetIds.contains(p.id)).toList();
-    final totalPrice = _selectedType.priceInPKR * selectedPets.length;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppSpacing.screenPadding),
@@ -1185,18 +1169,7 @@ class _BookAppointmentWizardState extends State<BookAppointmentWizard>
                 _buildConfirmationItem(
                   icon: Icons.timer_outlined,
                   label: 'Duration',
-                  value: '${_selectedType.durationMinutes} minutes',
-                ),
-                _buildDivider(),
-                // Price
-                _buildConfirmationItem(
-                  icon: Icons.payments_rounded,
-                  label: 'Total',
-                  value: 'PKR ${_formatNumber(totalPrice)}',
-                  isPrimary: true,
-                  subValue: selectedPets.length > 1 
-                      ? '${_selectedType.formattedPrice} × ${selectedPets.length} pets'
-                      : null,
+                  value: '30 minutes',
                 ),
               ],
             ),

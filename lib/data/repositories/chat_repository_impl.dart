@@ -373,28 +373,33 @@ class ChatRepositoryImpl implements ChatRepository {
   }
 
   @override
-  Future<void> syncMessages(int chatId) async {
+  Future<void> syncMessages(int chatId, {bool force = false}) async {
     if (!_connectivity.isOnline) return;
 
     try {
       // Get last sync time for this chat
       final lastSync = await _db.getLastSyncTime('messages', entityId: chatId.toString());
 
-      // Delta query
+      // Delta query - use gte (>=) instead of gt (>) to avoid missing boundary messages
       List<dynamic> messages;
-      if (lastSync != null) {
+      if (lastSync != null && !force) {
+        // Subtract 1 second from lastSync to create overlap and ensure no messages are missed
+        final querySince = lastSync.subtract(const Duration(seconds: 1));
         messages = await _supabase
             .from('messages')
             .select('*')
             .eq('chat_id', chatId)
-            .gt('created_at', lastSync.toIso8601String())
+            .gte('created_at', querySince.toIso8601String())
             .order('created_at', ascending: true);
+        debugPrint('🔄 Delta sync for chat $chatId (since ${querySince.toIso8601String()})');
       } else {
+        // Full sync - fetch ALL messages
         messages = await _supabase
             .from('messages')
             .select('*')
             .eq('chat_id', chatId)
             .order('created_at', ascending: true);
+        debugPrint('🔄 Full sync for chat $chatId${force ? " (forced)" : " (first sync)"}');
       }
 
       // Upsert to local DB

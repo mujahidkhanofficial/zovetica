@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import '../models/app_models.dart';
 import 'supabase_service.dart';
 import 'storage_service.dart';
+import 'notification_service.dart';
+import 'user_service.dart';
 
 // Top-level function for isolate
 List<Post> _parsePosts(List<dynamic> data) {
@@ -12,6 +14,8 @@ List<Post> _parsePosts(List<dynamic> data) {
 class PostService {
   final _client = SupabaseService.client;
   final _storageService = StorageService();
+  final _notificationService = NotificationService();
+  final _userService = UserService();
 
   /// Fetch all posts ordered by newest first
   Future<List<Post>> fetchPosts() async {
@@ -204,7 +208,7 @@ class PostService {
     }
   }
 
-  /// Toggle Like
+  /// Toggle Like with notification
   Future<bool> toggleLike(int postId) async {
     final userId = SupabaseService.currentUser?.id;
     if (userId == null) {
@@ -256,6 +260,9 @@ class PostService {
           }).eq('id', postId);
         });
         
+        // Send notification to post author
+        await _sendLikeNotification(postId, userId);
+        
         debugPrint('toggleLike: Like successful');
         return true; // Liked
       }
@@ -266,7 +273,43 @@ class PostService {
     }
   }
 
-  /// Add Comment
+  /// Send notification when someone likes a post
+  Future<void> _sendLikeNotification(int postId, String likerId) async {
+    try {
+      // Get post author
+      final post = await _client
+          .from('posts')
+          .select('user_id')
+          .eq('id', postId)
+          .maybeSingle();
+      
+      if (post == null) return;
+      
+      final authorId = post['user_id'] as String?;
+      
+      // Don't notify if user liked their own post
+      if (authorId == null || authorId == likerId) return;
+      
+      // Get liker's name
+      final likerData = await _userService.getCurrentUser();
+      final likerName = likerData?['name'] ?? 'Someone';
+      
+      await _notificationService.createNotification(
+        userId: authorId,
+        title: '$likerName liked your post ❤️',
+        body: 'Tap to view your post',
+        type: NotificationService.typeCommunityLike,
+        relatedId: postId.toString(),
+        actorId: likerId,
+      );
+      
+      debugPrint('📬 Like notification sent to post author: $authorId');
+    } catch (e) {
+      debugPrint('Error sending like notification: $e');
+    }
+  }
+
+  /// Add Comment with notification
   Future<Comment?> addComment(int postId, String content) async {
     final userId = SupabaseService.currentUser?.id;
     if (userId == null) return null;
@@ -278,6 +321,9 @@ class PostService {
         'post_id': postId,
         'content': content,
       }).select().single();
+
+      // Send notification to post author
+      await _sendCommentNotification(postId, userId, content);
 
       // Construct Comment with minimal author info (UI will use local profile)
       return Comment(
@@ -296,6 +342,47 @@ class PostService {
     } catch (e) {
       debugPrint('Error adding comment: $e');
       return null;
+    }
+  }
+
+  /// Send notification when someone comments on a post
+  Future<void> _sendCommentNotification(int postId, String commenterId, String commentContent) async {
+    try {
+      // Get post author
+      final post = await _client
+          .from('posts')
+          .select('user_id')
+          .eq('id', postId)
+          .maybeSingle();
+      
+      if (post == null) return;
+      
+      final authorId = post['user_id'] as String?;
+      
+      // Don't notify if user commented on their own post
+      if (authorId == null || authorId == commenterId) return;
+      
+      // Get commenter's name
+      final commenterData = await _userService.getCurrentUser();
+      final commenterName = commenterData?['name'] ?? 'Someone';
+      
+      // Truncate comment for preview
+      final preview = commentContent.length > 50 
+          ? '${commentContent.substring(0, 47)}...' 
+          : commentContent;
+      
+      await _notificationService.createNotification(
+        userId: authorId,
+        title: '$commenterName commented on your post 💬',
+        body: preview,
+        type: NotificationService.typeCommunityComment,
+        relatedId: postId.toString(),
+        actorId: commenterId,
+      );
+      
+      debugPrint('📬 Comment notification sent to post author: $authorId');
+    } catch (e) {
+      debugPrint('Error sending comment notification: $e');
     }
   }
 
