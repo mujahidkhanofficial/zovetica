@@ -75,10 +75,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                        child: Image.asset(
                           page['image']!,
                           height: 300,
-                          errorBuilder: (context, error, stackTrace) => Icon(
-                            Icons.pets_rounded, 
-                            size: 150, 
-                            color: AppColors.primary.withAlpha(51)
+                          errorBuilder: (context, error, stackTrace) => Image.asset(
+                            'paw_logo.png',
+                            height: 150,
                           ),
                        ),
                     ),

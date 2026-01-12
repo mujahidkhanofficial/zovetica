@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
+import '../../theme/app_gradients.dart';
+import '../../theme/app_shadows.dart';
 import '../../services/admin_service.dart';
 
 /// Admin Doctor Verification Screen
@@ -37,7 +39,9 @@ class _AdminDoctorsScreenState extends State<AdminDoctorsScreen>
   Future<void> _loadDoctors() async {
     setState(() => _isLoading = true);
 
-    final pending = await _adminService.getAllDoctors(pendingOnly: true);
+    // Fetch pending applications from the new table via RPC
+    final pending = await _adminService.getPendingDoctorApplications();
+    // Fetch verified doctors from the doctors table
     final verified = await _adminService.getAllDoctors(verifiedOnly: true);
 
     setState(() {
@@ -50,39 +54,81 @@ class _AdminDoctorsScreenState extends State<AdminDoctorsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.cloud,
       appBar: AppBar(
-        title: const Text('Doctor Verification'),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: [
-            Tab(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('Pending'),
-                  if (_pendingDoctors.isNotEmpty) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.warning,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '${_pendingDoctors.length}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ],
+        title: const Text(
+          'Doctor Verification',
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+        ),
+        centerTitle: true,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: AppGradients.primaryDiagonal,
+          ),
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(70),
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: Colors.white.withAlpha(51),
+              borderRadius: BorderRadius.circular(25),
+              border: Border.all(color: Colors.white.withAlpha(77)),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              indicator: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(21),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withAlpha(26),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
                 ],
               ),
+              indicatorSize: TabBarIndicatorSize.tab,
+              labelColor: AppColors.primary,
+              unselectedLabelColor: Colors.white,
+              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+              dividerColor: Colors.transparent,
+              tabs: [
+                Tab(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text('Pending'),
+                      if (_pendingDoctors.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: const BoxDecoration(
+                            color: AppColors.error,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            '${_pendingDoctors.length}',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const Tab(text: 'Verified'),
+              ],
             ),
-            const Tab(text: 'Verified'),
-          ],
+          ),
         ),
       ),
       body: _isLoading
@@ -130,34 +176,45 @@ class _AdminDoctorsScreenState extends State<AdminDoctorsScreen>
 
   Widget _buildDoctorCard(Map<String, dynamic> doctor, bool isPending) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final userData = doctor['users'] as Map<String, dynamic>?;
-    final name = userData?['name'] ?? 'Unknown Doctor';
-    final email = userData?['email'] ?? '';
-    final profileImage = userData?['profile_image'] ?? '';
-    final specialty = doctor['specialty'] ?? 'General';
-    final clinic = doctor['clinic'] ?? 'Not specified';
-    final rating = doctor['rating']?.toString() ?? '0.0';
-    final reviewsCount = doctor['reviews_count']?.toString() ?? '0';
+    
+    // Handle different data structures
+    // Pending: flat structure from RPC (user_name, user_email, clinic_name)
+    // Verified: nested structure from join (users: {name, email}, clinic)
+    
+    String name;
+    String email;
+    String profileImage = '';
+    String specialty;
+    String clinic;
+    String rating = '0.0';
+    String reviewsCount = '0';
+    String id = doctor['id']; // This is application_id for pending, doctor_id for verified
+
+    if (isPending) {
+      name = doctor['user_name'] ?? 'Unknown User';
+      email = doctor['user_email'] ?? '';
+      specialty = doctor['specialty'] ?? 'General';
+      clinic = doctor['clinic_name'] ?? 'Not specified';
+    } else {
+      final userData = doctor['users'] as Map<String, dynamic>?;
+      name = userData?['name'] ?? 'Unknown Doctor';
+      email = userData?['email'] ?? '';
+      profileImage = userData?['profile_image'] ?? '';
+      specialty = doctor['specialty'] ?? 'General';
+      clinic = doctor['clinic'] ?? 'Not specified';
+      rating = doctor['rating']?.toString() ?? '0.0';
+      reviewsCount = doctor['reviews_count']?.toString() ?? '0';
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
       decoration: BoxDecoration(
         color: isDark ? AppColors.surfaceDark : Colors.white,
         borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-        border: Border.all(
-          color: isPending
-              ? AppColors.warning.withOpacity(0.5)
-              : AppColors.success.withOpacity(0.5),
-        ),
-        boxShadow: isDark
-            ? null
-            : [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+        boxShadow: isDark ? AppShadows.none : AppShadows.card,
+        border: isDark 
+          ? Border.all(color: AppColors.slate.withOpacity(0.2))
+          : null,
       ),
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.lg),
@@ -323,15 +380,17 @@ class _AdminDoctorsScreenState extends State<AdminDoctorsScreen>
     );
   }
 
-  Future<void> _approveDoctor(String doctorId) async {
-    final success = await _adminService.verifyDoctor(doctorId);
+  Future<void> _approveDoctor(String applicationId) async {
+    final success = await _adminService.approveDoctorApplication(applicationId);
     if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Doctor approved successfully!'),
-          backgroundColor: AppColors.success,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Doctor approved successfully!'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
       _loadDoctors();
     }
   }
@@ -373,11 +432,11 @@ class _AdminDoctorsScreenState extends State<AdminDoctorsScreen>
     );
 
     if (confirmed == true && reasonController.text.isNotEmpty) {
-      final success = await _adminService.rejectDoctor(
-        doctorId,
+      final success = await _adminService.rejectDoctorApplication(
+        doctorId, // This is actually applicationId in the pending context
         reasonController.text,
       );
-      if (success) {
+      if (success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Doctor application rejected'),

@@ -132,7 +132,7 @@ class _SplashScreenState extends State<SplashScreen>
                       height: 140,
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(40),
+                        shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withAlpha(38),
@@ -144,9 +144,12 @@ class _SplashScreenState extends State<SplashScreen>
                       child: Center(
                         child: Transform.translate(
                           offset: Offset(0, -10 * (1 - _bounceAnimation.value)),
-                          child: const Text(
-                            '🐾',
-                            style: TextStyle(fontSize: 64),
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Image.asset(
+                              'paw_logo.png',
+                              fit: BoxFit.contain,
+                            ),
                           ),
                         ),
                       ),

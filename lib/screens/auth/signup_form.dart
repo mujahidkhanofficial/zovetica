@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zovetica/services/auth_service.dart';
 import 'package:zovetica/services/user_service.dart';
 import '../../theme/app_colors.dart';
@@ -227,15 +228,13 @@ class _SignUpFormState extends State<SignUpForm> {
     try {
       // SECURITY: Only pass non-privileged data to signUp
       // Role is set to 'pet_owner' by database trigger
-      // Doctor registration requires admin approval AFTER signup
+      // Doctor applications are submitted separately and require admin approval
       final response = await _authService.signUp(
           email: email, 
           password: pass,
           name: "$firstName $lastName",
           username: username,
           phone: phone,
-          // ❌ REMOVED: role, specialty, clinic - prevents privilege escalation
-          // Doctor applicants will need to request role upgrade after signup
       );
 
       if (!mounted) return;
@@ -257,8 +256,20 @@ class _SignUpFormState extends State<SignUpForm> {
       if (response.user == null && response.session == null) {
         debugPrint('📧 Email confirmation mode: Verification email sent to $email');
         
+        // Store doctor application data locally for submission after verification
+        // We can't submit to DB yet because user_id doesn't exist until email verified
+        if (_selectedRole == UserRole.doctor) {
+          debugPrint('📝 Doctor signup detected - will submit application after email verification');
+          // Store in shared preferences for later submission
+          await _storePendingDoctorApplication(
+            email: email,
+            specialty: _selectedSpecialty!,
+            clinicName: clinic,
+          );
+        }
+        
         // Show success dialog for email verification
-        await _showEmailVerificationDialog(email);
+        await _showEmailVerificationDialog(email, isDoctorApplication: _selectedRole == UserRole.doctor);
         return;
       }
 
@@ -268,25 +279,39 @@ class _SignUpFormState extends State<SignUpForm> {
         debugPrint('✅ Instant signup: User created with ID ${response.user!.id}');
         
         try {
+          // SECURITY: Always set role to 'pet_owner' - never trust client
           await _userService.createUser(
             id: response.user!.id,
             email: email,
             name: "$firstName $lastName",
             phone: phone,
-            role: _selectedRole == UserRole.doctor ? "doctor" : "pet_owner",
-            specialty: _selectedRole == UserRole.doctor ? _selectedSpecialty : null,
-            clinic: _selectedRole == UserRole.doctor ? clinic : null,
+            role: 'pet_owner',  // ✅ HARDCODED - prevents privilege escalation
             username: username,
           );
+          debugPrint('✅ User profile created successfully');
         } catch (e) {
           // Profile might already exist from trigger - that's fine
-          if (!e.toString().contains('duplicate key') && !e.toString().contains('already exists')) {
-            debugPrint('⚠️ Profile creation warning: $e');
+          final errorStr = e.toString().toLowerCase();
+          if (errorStr.contains('duplicate') || 
+              errorStr.contains('already exists') ||
+              errorStr.contains('unique constraint')) {
+            debugPrint('ℹ️ Profile already exists (from trigger) - continuing');
+          } else {
+            debugPrint('⚠️ Profile creation error: $e');
           }
         }
 
+        // If user selected Doctor role, submit the application
+        if (_selectedRole == UserRole.doctor) {
+          await _submitDoctorApplication(
+            userId: response.user!.id,
+            specialty: _selectedSpecialty!,
+            clinicName: clinic,
+          );
+        }
+
         // Show success and redirect to login
-        await _showEmailVerificationDialog(email);
+        await _showEmailVerificationDialog(email, isDoctorApplication: _selectedRole == UserRole.doctor);
       }
     } on AuthException catch (e) {
       if (!mounted) return;
@@ -304,8 +329,50 @@ class _SignUpFormState extends State<SignUpForm> {
     }
   }
 
+  /// Submit doctor application to database
+  Future<void> _submitDoctorApplication({
+    required String userId,
+    required String specialty,
+    required String clinicName,
+  }) async {
+    try {
+      debugPrint('📝 Submitting doctor application for user: $userId');
+      
+      final supabase = Supabase.instance.client;
+      await supabase.from('doctor_applications').insert({
+        'user_id': userId,
+        'specialty': specialty,
+        'clinic_name': clinicName,
+        'status': 'pending',
+      });
+      
+      debugPrint('✅ Doctor application submitted successfully');
+    } catch (e) {
+      debugPrint('⚠️ Failed to submit doctor application: $e');
+      // Don't throw - user account is already created
+      // They can resubmit application later from profile
+    }
+  }
+
+  /// Store pending doctor application for users who need email verification first
+  Future<void> _storePendingDoctorApplication({
+    required String email,
+    required String specialty,
+    required String clinicName,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('pending_doctor_email', email);
+      await prefs.setString('pending_doctor_specialty', specialty);
+      await prefs.setString('pending_doctor_clinic', clinicName);
+      debugPrint('💾 Stored pending doctor application for $email');
+    } catch (e) {
+      debugPrint('⚠️ Failed to store pending application: $e');
+    }
+  }
+
   /// Show email verification dialog
-  Future<void> _showEmailVerificationDialog(String email) async {
+  Future<void> _showEmailVerificationDialog(String email, {bool isDoctorApplication = false}) async {
     if (!mounted) return;
     
     await showDialog(
@@ -388,7 +455,9 @@ class _SignUpFormState extends State<SignUpForm> {
               
               // Description
               Text(
-                'We\'ve sent a verification link to your email address. Please check your inbox and click the link to complete your registration.',
+                isDoctorApplication 
+                    ? 'We\'ve sent a verification link to your email. After verification, your doctor application will be reviewed by our admin team. You\'ll be notified once approved!'
+                    : 'We\'ve sent a verification link to your email address. Please check your inbox and click the link to complete your registration.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: AppColors.slate,
@@ -396,6 +465,35 @@ class _SignUpFormState extends State<SignUpForm> {
                   height: 1.6,
                 ),
               ),
+              
+              // Doctor application notice
+              if (isDoctorApplication) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.warning.withAlpha(26),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.warning.withAlpha(50)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.medical_services_rounded, color: AppColors.warning, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Doctor accounts require admin approval',
+                          style: TextStyle(
+                            color: AppColors.warning,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               
               const SizedBox(height: 8),
               

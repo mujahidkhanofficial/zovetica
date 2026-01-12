@@ -360,14 +360,79 @@ class MockNotificationService extends _i1.Mock
   }
 
   @override
-  _i3.Stream<List<Map<String, dynamic>>> getNotificationsStream() =>
-      (super.noSuchMethod(
+  _i3.Future<void> init() => (super.noSuchMethod(
         Invocation.method(
-          #getNotificationsStream,
+          #init,
           [],
         ),
-        returnValue: _i3.Stream<List<Map<String, dynamic>>>.empty(),
-      ) as _i3.Stream<List<Map<String, dynamic>>>);
+        returnValue: _i3.Future<void>.value(),
+        returnValueForMissingStub: _i3.Future<void>.value(),
+      ) as _i3.Future<void>);
+
+  @override
+  _i3.Future<void> requestPermissions() => (super.noSuchMethod(
+        Invocation.method(
+          #requestPermissions,
+          [],
+        ),
+        returnValue: _i3.Future<void>.value(),
+        returnValueForMissingStub: _i3.Future<void>.value(),
+      ) as _i3.Future<void>);
+
+  @override
+  _i3.Future<void> showNotification({
+    required int? id,
+    required String? title,
+    required String? body,
+    String? payload,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #showNotification,
+          [],
+          {
+            #id: id,
+            #title: title,
+            #body: body,
+            #payload: payload,
+          },
+        ),
+        returnValue: _i3.Future<void>.value(),
+        returnValueForMissingStub: _i3.Future<void>.value(),
+      ) as _i3.Future<void>);
+
+  @override
+  _i3.Future<void> scheduleAppointmentReminder({
+    required String? appointmentId,
+    required DateTime? appointmentDateTime,
+    required String? doctorName,
+    required String? petName,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #scheduleAppointmentReminder,
+          [],
+          {
+            #appointmentId: appointmentId,
+            #appointmentDateTime: appointmentDateTime,
+            #doctorName: doctorName,
+            #petName: petName,
+          },
+        ),
+        returnValue: _i3.Future<void>.value(),
+        returnValueForMissingStub: _i3.Future<void>.value(),
+      ) as _i3.Future<void>);
+
+  @override
+  _i3.Future<void> cancelAppointmentReminder(String? appointmentId) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #cancelAppointmentReminder,
+          [appointmentId],
+        ),
+        returnValue: _i3.Future<void>.value(),
+        returnValueForMissingStub: _i3.Future<void>.value(),
+      ) as _i3.Future<void>);
 
   @override
   _i3.Future<List<Map<String, dynamic>>> getNotifications() =>
@@ -379,39 +444,6 @@ class MockNotificationService extends _i1.Mock
         returnValue: _i3.Future<List<Map<String, dynamic>>>.value(
             <Map<String, dynamic>>[]),
       ) as _i3.Future<List<Map<String, dynamic>>>);
-
-  @override
-  _i3.Stream<int> getUnreadCountStream() => (super.noSuchMethod(
-        Invocation.method(
-          #getUnreadCountStream,
-          [],
-        ),
-        returnValue: _i3.Stream<int>.empty(),
-      ) as _i3.Stream<int>);
-
-  @override
-  _i3.Future<void> createNotification({
-    required String? userId,
-    required String? type,
-    required String? title,
-    required String? body,
-    String? relatedId,
-  }) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #createNotification,
-          [],
-          {
-            #userId: userId,
-            #type: type,
-            #title: title,
-            #body: body,
-            #relatedId: relatedId,
-          },
-        ),
-        returnValue: _i3.Future<void>.value(),
-        returnValueForMissingStub: _i3.Future<void>.value(),
-      ) as _i3.Future<void>);
 
   @override
   _i3.Future<void> markAsRead(int? notificationId) => (super.noSuchMethod(
@@ -432,6 +464,79 @@ class MockNotificationService extends _i1.Mock
         returnValue: _i3.Future<void>.value(),
         returnValueForMissingStub: _i3.Future<void>.value(),
       ) as _i3.Future<void>);
+
+  @override
+  _i3.Future<void> createNotification({
+    required String? userId,
+    required String? title,
+    required String? body,
+    required String? type,
+    dynamic relatedId,
+    String? actorId,
+    bool? showLocalPush = true,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #createNotification,
+          [],
+          {
+            #userId: userId,
+            #title: title,
+            #body: body,
+            #type: type,
+            #relatedId: relatedId,
+            #actorId: actorId,
+            #showLocalPush: showLocalPush,
+          },
+        ),
+        returnValue: _i3.Future<void>.value(),
+        returnValueForMissingStub: _i3.Future<void>.value(),
+      ) as _i3.Future<void>);
+
+  @override
+  _i3.Stream<int> getUnreadCountStream() => (super.noSuchMethod(
+        Invocation.method(
+          #getUnreadCountStream,
+          [],
+        ),
+        returnValue: _i3.Stream<int>.empty(),
+      ) as _i3.Stream<int>);
+
+  @override
+  void startNotificationListener() => super.noSuchMethod(
+        Invocation.method(
+          #startNotificationListener,
+          [],
+        ),
+        returnValueForMissingStub: null,
+      );
+
+  @override
+  void stopNotificationListener() => super.noSuchMethod(
+        Invocation.method(
+          #stopNotificationListener,
+          [],
+        ),
+        returnValueForMissingStub: null,
+      );
+
+  @override
+  _i3.Future<int> getUnreadMessageCount() => (super.noSuchMethod(
+        Invocation.method(
+          #getUnreadMessageCount,
+          [],
+        ),
+        returnValue: _i3.Future<int>.value(0),
+      ) as _i3.Future<int>);
+
+  @override
+  _i3.Future<int> getUnreadCountByType(String? type) => (super.noSuchMethod(
+        Invocation.method(
+          #getUnreadCountByType,
+          [type],
+        ),
+        returnValue: _i3.Future<int>.value(0),
+      ) as _i3.Future<int>);
 }
 
 /// A class which mocks [UserService].

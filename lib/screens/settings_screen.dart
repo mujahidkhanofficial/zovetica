@@ -619,169 +619,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               password: password,
                             );
                             
-                            // Delete user data from ALL tables
-                            final userId = user.id;
-                            
-                            debugPrint('🗑️ Starting account deletion for user: $userId');
+                            // Delete user using secure RPC
+                            debugPrint('🗑️ Starting secure account deletion for user: ${user.id}');
                             
                             try {
-                              // 1. Clear local database first
+                              // 1. Clear local database first (optimistic)
                               await AppDatabase.instance.clearAllData();
                               debugPrint('✅ Local database cleared');
                               
-                              // 2. Delete from all Supabase tables (order matters due to foreign keys)
+                              // 2. Call secure server-side deletion
+                              final response = await SupabaseService.client
+                                  .rpc('delete_own_account');
+                                  
+                              debugPrint('✅ Server deletion response: $response');
                               
-                              // Delete notifications
-                              try {
-                                await SupabaseService.client
-                                    .from('notifications')
-                                    .delete()
-                                    .or('user_id.eq.$userId,actor_id.eq.$userId');
-                                debugPrint('✅ Notifications deleted');
-                              } catch (e) {
-                                debugPrint('⚠️ Failed to delete notifications: $e');
-                              }
-                              
-                              // Delete messages (sent by user)
-                              try {
-                                await SupabaseService.client
-                                    .from('messages')
-                                    .delete()
-                                    .eq('sender_id', userId);
-                                debugPrint('✅ Messages deleted');
-                              } catch (e) {
-                                debugPrint('⚠️ Failed to delete messages: $e');
-                              }
-                              
-                              // Delete chat participants
-                              try {
-                                await SupabaseService.client
-                                    .from('chat_participants')
-                                    .delete()
-                                    .eq('user_id', userId);
-                                debugPrint('✅ Chat participants deleted');
-                              } catch (e) {
-                                debugPrint('⚠️ Failed to delete chat participants: $e');
-                              }
-                              
-                              // Delete post likes
-                              try {
-                                await SupabaseService.client
-                                    .from('post_likes')
-                                    .delete()
-                                    .eq('user_id', userId);
-                                debugPrint('✅ Post likes deleted');
-                              } catch (e) {
-                                debugPrint('⚠️ Failed to delete post likes: $e');
-                              }
-                              
-                              // Delete post comments
-                              try {
-                                await SupabaseService.client
-                                    .from('post_comments')
-                                    .delete()
-                                    .eq('user_id', userId);
-                                debugPrint('✅ Post comments deleted');
-                              } catch (e) {
-                                debugPrint('⚠️ Failed to delete post comments: $e');
-                              }
-                              
-                              // Delete posts
-                              try {
-                                await SupabaseService.client
-                                    .from('posts')
-                                    .delete()
-                                    .eq('user_id', userId);
-                                debugPrint('✅ Posts deleted');
-                              } catch (e) {
-                                debugPrint('⚠️ Failed to delete posts: $e');
-                              }
-                              
-                              // Delete ALL appointments related to user (as owner OR as patient)
-                              // This must be before pets deletion
-                              try {
-                                // First get all pet IDs owned by this user
-                                final pets = await SupabaseService.client
-                                    .from('pets')
-                                    .select('id')
-                                    .eq('owner_id', userId);
-                                
-                                final petIds = pets.map((p) => p['id']).toList();
-                                
-                                // Delete appointments where user is the patient
-                                await SupabaseService.client
-                                    .from('appointments')
-                                    .delete()
-                                    .eq('user_id', userId);
-                                
-                                // Delete appointments for user's pets
-                                if (petIds.isNotEmpty) {
-                                  await SupabaseService.client
-                                      .from('appointments')
-                                      .delete()
-                                      .inFilter('pet_id', petIds);
-                                }
-                                
-                                debugPrint('✅ Appointments deleted');
-                              } catch (e) {
-                                debugPrint('⚠️ Failed to delete appointments: $e');
-                              }
-                              
-                              // Now safe to delete pets
-                              try {
-                                await SupabaseService.client
-                                    .from('pets')
-                                    .delete()
-                                    .eq('owner_id', userId);
-                                debugPrint('✅ Pets deleted');
-                              } catch (e) {
-                                debugPrint('⚠️ Failed to delete pets: $e');
-                              }
-                              
-                              // Delete friendships
-                              try {
-                                await SupabaseService.client
-                                    .from('friendships')
-                                    .delete()
-                                    .or('user_id.eq.$userId,friend_id.eq.$userId');
-                                debugPrint('✅ Friendships deleted');
-                              } catch (e) {
-                                debugPrint('⚠️ Failed to delete friendships: $e');
-                              }
-                              
-                              // Delete doctor profile (if exists)
-                              try {
-                                await SupabaseService.client
-                                    .from('doctors')
-                                    .delete()
-                                    .eq('user_id', userId);
-                                debugPrint('✅ Doctor profile deleted (if existed)');
-                              } catch (e) {
-                                debugPrint('⚠️ Failed to delete doctor profile: $e');
-                              }
-                              
-                              // Delete user profile
-                              try {
-                                await SupabaseService.client
-                                    .from('users')
-                                    .delete()
-                                    .eq('id', userId);
-                                debugPrint('✅ User profile deleted');
-                              } catch (e) {
-                                debugPrint('⚠️ Failed to delete user profile: $e');
-                                throw e; // This one is critical
-                              }
-                              
-                              // 3. Delete auth user (try RPC first, fallback to admin deletion)
-                              try {
-                                await SupabaseService.client.rpc('delete_user');
-                                debugPrint('✅ Auth user deleted via RPC');
-                              } catch (rpcError) {
-                                debugPrint('⚠️ RPC delete failed: $rpcError');
-                                debugPrint('ℹ️ Auth user will be auto-deleted by cascade when profile deleted');
-                              }
-                              
-                              // 4. Sign out
+                              // 3. Sign out (just in case RPC didn't kill session)
                               await SupabaseService.client.auth.signOut();
                               
                               debugPrint('🎉 Account deletion complete!');

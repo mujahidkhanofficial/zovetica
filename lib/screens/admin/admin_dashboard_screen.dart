@@ -8,6 +8,7 @@ import '../../theme/app_gradients.dart';
 import '../../theme/app_shadows.dart';
 import 'admin_users_screen.dart';
 import 'admin_posts_screen.dart';
+import 'admin_doctors_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({Key? key}) : super(key: key);
@@ -199,6 +200,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _buildQuickActions() {
+    final pendingCount = _stats?['pending_doctors'] ?? 0;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -220,6 +223,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         ),
         const SizedBox(height: 12),
         _buildActionTile(
+          'Doctor Verification',
+          'Approve or reject doctor applications',
+          Icons.verified_user_rounded,
+          AppColors.secondary,
+          () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminDoctorsScreen())),
+          badgeCount: pendingCount,
+        ),
+        const SizedBox(height: 12),
+        _buildActionTile(
           'Content Moderation',
           'Review flagged posts and comments',
           Icons.shield_rounded,
@@ -231,14 +243,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           'Broadcast Notification',
           'Send alerts to all users',
           Icons.notifications_active_rounded,
-           AppColors.golden,
-           _showBroadcastDialog,
+          AppColors.golden,
+          _showBroadcastDialog,
         ),
       ],
     );
   }
 
-  Widget _buildActionTile(String title, String subtitle, IconData icon, Color color, VoidCallback onTap) {
+  Widget _buildActionTile(String title, String subtitle, IconData icon, Color color, VoidCallback onTap, {int badgeCount = 0}) {
     return InkWell(
       onTap: onTap,
       child: Container(
@@ -250,13 +262,43 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         ),
         child: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: color.withAlpha(26),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: color, size: 24),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: color.withAlpha(26),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: color, size: 24),
+                ),
+                if (badgeCount > 0)
+                  Positioned(
+                    top: -2,
+                    right: -2,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: AppColors.error,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 18,
+                        minHeight: 18,
+                      ),
+                      child: Text(
+                        badgeCount > 9 ? '9+' : '$badgeCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(width: 16),
             Expanded(

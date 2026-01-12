@@ -633,6 +633,12 @@ class $LocalMessagesTable extends LocalMessages
   late final GeneratedColumn<DateTime> editedAt = GeneratedColumn<DateTime>(
       'edited_at', aliasedName, true,
       type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _clientMessageIdMeta =
+      const VerificationMeta('clientMessageId');
+  @override
+  late final GeneratedColumn<String> clientMessageId = GeneratedColumn<String>(
+      'client_message_id', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
   static const VerificationMeta _syncStatusMeta =
       const VerificationMeta('syncStatus');
   @override
@@ -666,6 +672,7 @@ class $LocalMessagesTable extends LocalMessages
         content,
         createdAt,
         editedAt,
+        clientMessageId,
         syncStatus,
         syncedAt,
         isDeleted
@@ -715,6 +722,12 @@ class $LocalMessagesTable extends LocalMessages
       context.handle(_editedAtMeta,
           editedAt.isAcceptableOrUnknown(data['edited_at']!, _editedAtMeta));
     }
+    if (data.containsKey('client_message_id')) {
+      context.handle(
+          _clientMessageIdMeta,
+          clientMessageId.isAcceptableOrUnknown(
+              data['client_message_id']!, _clientMessageIdMeta));
+    }
     if (data.containsKey('sync_status')) {
       context.handle(
           _syncStatusMeta,
@@ -752,6 +765,8 @@ class $LocalMessagesTable extends LocalMessages
           .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
       editedAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}edited_at']),
+      clientMessageId: attachedDatabase.typeMapping.read(
+          DriftSqlType.string, data['${effectivePrefix}client_message_id']),
       syncStatus: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}sync_status'])!,
       syncedAt: attachedDatabase.typeMapping
@@ -775,6 +790,7 @@ class LocalMessage extends DataClass implements Insertable<LocalMessage> {
   final String content;
   final DateTime createdAt;
   final DateTime? editedAt;
+  final String? clientMessageId;
   final String syncStatus;
   final DateTime? syncedAt;
   final bool isDeleted;
@@ -786,6 +802,7 @@ class LocalMessage extends DataClass implements Insertable<LocalMessage> {
       required this.content,
       required this.createdAt,
       this.editedAt,
+      this.clientMessageId,
       required this.syncStatus,
       this.syncedAt,
       required this.isDeleted});
@@ -802,6 +819,9 @@ class LocalMessage extends DataClass implements Insertable<LocalMessage> {
     map['created_at'] = Variable<DateTime>(createdAt);
     if (!nullToAbsent || editedAt != null) {
       map['edited_at'] = Variable<DateTime>(editedAt);
+    }
+    if (!nullToAbsent || clientMessageId != null) {
+      map['client_message_id'] = Variable<String>(clientMessageId);
     }
     map['sync_status'] = Variable<String>(syncStatus);
     if (!nullToAbsent || syncedAt != null) {
@@ -824,6 +844,9 @@ class LocalMessage extends DataClass implements Insertable<LocalMessage> {
       editedAt: editedAt == null && nullToAbsent
           ? const Value.absent()
           : Value(editedAt),
+      clientMessageId: clientMessageId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(clientMessageId),
       syncStatus: Value(syncStatus),
       syncedAt: syncedAt == null && nullToAbsent
           ? const Value.absent()
@@ -843,6 +866,7 @@ class LocalMessage extends DataClass implements Insertable<LocalMessage> {
       content: serializer.fromJson<String>(json['content']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       editedAt: serializer.fromJson<DateTime?>(json['editedAt']),
+      clientMessageId: serializer.fromJson<String?>(json['clientMessageId']),
       syncStatus: serializer.fromJson<String>(json['syncStatus']),
       syncedAt: serializer.fromJson<DateTime?>(json['syncedAt']),
       isDeleted: serializer.fromJson<bool>(json['isDeleted']),
@@ -859,6 +883,7 @@ class LocalMessage extends DataClass implements Insertable<LocalMessage> {
       'content': serializer.toJson<String>(content),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'editedAt': serializer.toJson<DateTime?>(editedAt),
+      'clientMessageId': serializer.toJson<String?>(clientMessageId),
       'syncStatus': serializer.toJson<String>(syncStatus),
       'syncedAt': serializer.toJson<DateTime?>(syncedAt),
       'isDeleted': serializer.toJson<bool>(isDeleted),
@@ -873,6 +898,7 @@ class LocalMessage extends DataClass implements Insertable<LocalMessage> {
           String? content,
           DateTime? createdAt,
           Value<DateTime?> editedAt = const Value.absent(),
+          Value<String?> clientMessageId = const Value.absent(),
           String? syncStatus,
           Value<DateTime?> syncedAt = const Value.absent(),
           bool? isDeleted}) =>
@@ -884,6 +910,9 @@ class LocalMessage extends DataClass implements Insertable<LocalMessage> {
         content: content ?? this.content,
         createdAt: createdAt ?? this.createdAt,
         editedAt: editedAt.present ? editedAt.value : this.editedAt,
+        clientMessageId: clientMessageId.present
+            ? clientMessageId.value
+            : this.clientMessageId,
         syncStatus: syncStatus ?? this.syncStatus,
         syncedAt: syncedAt.present ? syncedAt.value : this.syncedAt,
         isDeleted: isDeleted ?? this.isDeleted,
@@ -898,6 +927,7 @@ class LocalMessage extends DataClass implements Insertable<LocalMessage> {
           ..write('content: $content, ')
           ..write('createdAt: $createdAt, ')
           ..write('editedAt: $editedAt, ')
+          ..write('clientMessageId: $clientMessageId, ')
           ..write('syncStatus: $syncStatus, ')
           ..write('syncedAt: $syncedAt, ')
           ..write('isDeleted: $isDeleted')
@@ -907,7 +937,7 @@ class LocalMessage extends DataClass implements Insertable<LocalMessage> {
 
   @override
   int get hashCode => Object.hash(id, remoteId, chatId, senderId, content,
-      createdAt, editedAt, syncStatus, syncedAt, isDeleted);
+      createdAt, editedAt, clientMessageId, syncStatus, syncedAt, isDeleted);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -919,6 +949,7 @@ class LocalMessage extends DataClass implements Insertable<LocalMessage> {
           other.content == this.content &&
           other.createdAt == this.createdAt &&
           other.editedAt == this.editedAt &&
+          other.clientMessageId == this.clientMessageId &&
           other.syncStatus == this.syncStatus &&
           other.syncedAt == this.syncedAt &&
           other.isDeleted == this.isDeleted);
@@ -932,6 +963,7 @@ class LocalMessagesCompanion extends UpdateCompanion<LocalMessage> {
   final Value<String> content;
   final Value<DateTime> createdAt;
   final Value<DateTime?> editedAt;
+  final Value<String?> clientMessageId;
   final Value<String> syncStatus;
   final Value<DateTime?> syncedAt;
   final Value<bool> isDeleted;
@@ -943,6 +975,7 @@ class LocalMessagesCompanion extends UpdateCompanion<LocalMessage> {
     this.content = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.editedAt = const Value.absent(),
+    this.clientMessageId = const Value.absent(),
     this.syncStatus = const Value.absent(),
     this.syncedAt = const Value.absent(),
     this.isDeleted = const Value.absent(),
@@ -955,6 +988,7 @@ class LocalMessagesCompanion extends UpdateCompanion<LocalMessage> {
     required String content,
     required DateTime createdAt,
     this.editedAt = const Value.absent(),
+    this.clientMessageId = const Value.absent(),
     this.syncStatus = const Value.absent(),
     this.syncedAt = const Value.absent(),
     this.isDeleted = const Value.absent(),
@@ -970,6 +1004,7 @@ class LocalMessagesCompanion extends UpdateCompanion<LocalMessage> {
     Expression<String>? content,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? editedAt,
+    Expression<String>? clientMessageId,
     Expression<String>? syncStatus,
     Expression<DateTime>? syncedAt,
     Expression<bool>? isDeleted,
@@ -982,6 +1017,7 @@ class LocalMessagesCompanion extends UpdateCompanion<LocalMessage> {
       if (content != null) 'content': content,
       if (createdAt != null) 'created_at': createdAt,
       if (editedAt != null) 'edited_at': editedAt,
+      if (clientMessageId != null) 'client_message_id': clientMessageId,
       if (syncStatus != null) 'sync_status': syncStatus,
       if (syncedAt != null) 'synced_at': syncedAt,
       if (isDeleted != null) 'is_deleted': isDeleted,
@@ -996,6 +1032,7 @@ class LocalMessagesCompanion extends UpdateCompanion<LocalMessage> {
       Value<String>? content,
       Value<DateTime>? createdAt,
       Value<DateTime?>? editedAt,
+      Value<String?>? clientMessageId,
       Value<String>? syncStatus,
       Value<DateTime?>? syncedAt,
       Value<bool>? isDeleted}) {
@@ -1007,6 +1044,7 @@ class LocalMessagesCompanion extends UpdateCompanion<LocalMessage> {
       content: content ?? this.content,
       createdAt: createdAt ?? this.createdAt,
       editedAt: editedAt ?? this.editedAt,
+      clientMessageId: clientMessageId ?? this.clientMessageId,
       syncStatus: syncStatus ?? this.syncStatus,
       syncedAt: syncedAt ?? this.syncedAt,
       isDeleted: isDeleted ?? this.isDeleted,
@@ -1037,6 +1075,9 @@ class LocalMessagesCompanion extends UpdateCompanion<LocalMessage> {
     if (editedAt.present) {
       map['edited_at'] = Variable<DateTime>(editedAt.value);
     }
+    if (clientMessageId.present) {
+      map['client_message_id'] = Variable<String>(clientMessageId.value);
+    }
     if (syncStatus.present) {
       map['sync_status'] = Variable<String>(syncStatus.value);
     }
@@ -1059,6 +1100,7 @@ class LocalMessagesCompanion extends UpdateCompanion<LocalMessage> {
           ..write('content: $content, ')
           ..write('createdAt: $createdAt, ')
           ..write('editedAt: $editedAt, ')
+          ..write('clientMessageId: $clientMessageId, ')
           ..write('syncStatus: $syncStatus, ')
           ..write('syncedAt: $syncedAt, ')
           ..write('isDeleted: $isDeleted')

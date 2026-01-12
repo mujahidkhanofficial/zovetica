@@ -38,18 +38,20 @@ class AdminService {
   /// Manual stats collection as fallback
   Future<Map<String, dynamic>> _getManualStats() async {
     try {
-      final usersCount = await _client.from('users').select('id').count();
-      final doctorsCount = await _client.from('doctors').select('id').count();
-      final petsCount = await _client.from('pets').select('id').count();
-      final appointmentsCount = await _client.from('appointments').select('id').count();
-      final postsCount = await _client.from('posts').select('id').count();
+      final usersCount = await _client.from('users').count(CountOption.exact);
+      final doctorsCount = await _client.from('doctors').count(CountOption.exact);
+      final pendingDoctorsCount = await _client.from('doctor_applications').count(CountOption.exact).eq('status', 'pending');
+      final petsCount = await _client.from('pets').count(CountOption.exact);
+      final appointmentsCount = await _client.from('appointments').count(CountOption.exact);
+      final postsCount = await _client.from('posts').count(CountOption.exact);
 
       return {
-        'total_users': usersCount.count,
-        'total_doctors': doctorsCount.count,
-        'total_pets': petsCount.count,
-        'total_appointments': appointmentsCount.count,
-        'total_posts': postsCount.count,
+        'total_users': usersCount,
+        'total_doctors': doctorsCount,
+        'pending_doctors': pendingDoctorsCount,
+        'total_pets': petsCount,
+        'total_appointments': appointmentsCount,
+        'total_posts': postsCount,
       };
     } catch (e) {
       print('Error in manual stats: $e');
@@ -195,20 +197,29 @@ class AdminService {
 
   // ============= DOCTOR MANAGEMENT =============
 
-  /// Fetches all doctors with optional filters.
+  /// Fetches pending doctor applications.
+  /// Uses the secure RPC get_pending_doctor_applications
+  Future<List<Map<String, dynamic>>> getPendingDoctorApplications() async {
+    try {
+      final response = await _client.rpc('get_pending_doctor_applications');
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      debugPrint('Error fetching pending applications: $e');
+      return [];
+    }
+  }
+
+  /// Fetches verified doctors.
   Future<List<Map<String, dynamic>>> getAllDoctors({
     int page = 0,
     int limit = 20,
     bool? verifiedOnly,
-    bool? pendingOnly,
   }) async {
     try {
       var query = _client.from('doctors').select('*, users(*)');
 
       if (verifiedOnly == true) {
         query = query.eq('verified', true);
-      } else if (pendingOnly == true) {
-        query = query.eq('verified', false);
       }
 
       final response = await query
@@ -223,38 +234,30 @@ class AdminService {
   }
 
   /// Approves a doctor's application.
-  Future<bool> verifyDoctor(String doctorId) async {
+  /// uses secure RPC approve_doctor_application
+  Future<bool> approveDoctorApplication(String applicationId) async {
     try {
-      final adminId = _client.auth.currentUser?.id;
-
-      await _client.from('doctors').update({
-        'verified': true,
-        'verified_at': DateTime.now().toIso8601String(),
-        'verified_by': adminId,
-        'rejection_reason': null,
-      }).eq('id', doctorId);
-
-      return true;
+      final response = await _client.rpc('approve_doctor_application', params: {
+        'application_id': applicationId,
+      });
+      return response['success'] == true;
     } catch (e) {
-      print('Error verifying doctor: $e');
+      print('Error approving doctor application: $e');
       return false;
     }
   }
 
   /// Rejects a doctor's application with a reason.
-  Future<bool> rejectDoctor(String doctorId, String reason) async {
+  /// uses secure RPC reject_doctor_application
+  Future<bool> rejectDoctorApplication(String applicationId, String reason) async {
     try {
-      final adminId = _client.auth.currentUser?.id;
-
-      await _client.from('doctors').update({
-        'verified': false,
-        'rejection_reason': reason,
-        'verified_by': adminId,
-      }).eq('id', doctorId);
-
-      return true;
+      final response = await _client.rpc('reject_doctor_application', params: {
+        'application_id': applicationId,
+        'reason': reason,
+      });
+      return response['success'] == true;
     } catch (e) {
-      print('Error rejecting doctor: $e');
+      print('Error rejecting doctor application: $e');
       return false;
     }
   }

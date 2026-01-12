@@ -45,6 +45,9 @@ class LocalMessages extends Table {
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get editedAt => dateTime().nullable()();
   
+  // Idempotency key for preventing duplicate sends
+  TextColumn get clientMessageId => text().nullable()();
+  
   // Sync metadata
   TextColumn get syncStatus => text().withDefault(const Constant('synced'))();
   // Values: 'pending', 'syncing', 'synced', 'failed'
@@ -296,7 +299,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration {
@@ -325,6 +328,10 @@ class AppDatabase extends _$AppDatabase {
         if (from < 6) {
           // Add local_health_events table for version 6
           await m.createTable(localHealthEvents);
+        }
+        if (from < 7) {
+          // Add client_message_id column for idempotency
+          await m.addColumn(localMessages, localMessages.clientMessageId);
         }
       },
     );
@@ -388,16 +395,19 @@ class AppDatabase extends _$AppDatabase {
   }
 
   /// Insert a pending message (optimistic write)
+  /// Uses clientMessageId as idempotency key to prevent duplicate sends
   Future<int> insertPendingMessage({
     required int chatId,
     required String senderId,
     required String content,
+    required String clientMessageId,
   }) async {
     return into(localMessages).insert(
       LocalMessagesCompanion(
         chatId: Value(chatId),
         senderId: Value(senderId),
         content: Value(content),
+        clientMessageId: Value(clientMessageId),
         createdAt: Value(DateTime.now()),
         syncStatus: const Value('pending'),
       ),

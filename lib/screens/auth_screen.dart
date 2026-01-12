@@ -46,21 +46,27 @@ class _AuthScreenState extends State<AuthScreen>
                 
                 // Logo
                 Container(
-                  width: 100,
-                  height: 100,
+                  width: 110,
+                  height: 110,
                   decoration: BoxDecoration(
-                    gradient: AppGradients.primaryCta,
-                    borderRadius: BorderRadius.circular(32),
+                    color: Colors.white,
+                    shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.primary.withAlpha(77),
-                        blurRadius: 24,
+                        color: AppColors.primary.withAlpha(50),
+                        blurRadius: 30,
                         offset: const Offset(0, 10),
                       ),
                     ],
                   ),
-                  child: const Center(
-                    child: Text('🐾', style: TextStyle(fontSize: 48)),
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(15),
+                      child: Image.asset(
+                        'paw_logo.png',
+                        fit: BoxFit.contain,
+                      ),
+                    ),
                   ),
                 ),
                 

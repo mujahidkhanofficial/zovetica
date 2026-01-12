@@ -6,7 +6,6 @@ import '../models/chat_message.dart';
 import '../models/chat_summary.dart';
 import '../services/supabase_service.dart';
 import '../services/notification_service.dart';
-import '../core/sync/sync_engine.dart';
 import '../data/local/database.dart';
 
 enum ConnectionStatus {
@@ -137,6 +136,10 @@ class GlobalChatManager {
   }
 
   /// Set up Supabase Realtime subscription for multiple chats
+  /// 
+  /// SECURITY NOTE: This subscription uses chat_id filtering to ensure
+  /// we only receive messages for chats the user participates in.
+  /// Server-side RLS policies provide the authoritative security layer.
   Future<void> _setupRealtimeSubscription(
       String userId, List<int> chatIds) async {
     if (chatIds.isEmpty) {
@@ -150,39 +153,81 @@ class GlobalChatManager {
       _mainChannel = null;
     }
 
-    // Create new channel for all chats
+    // Create new channel for user's chats only
     final channelName = 'user:$userId:chats';
     debugPrint('📡 Setting up channel: $channelName for ${chatIds.length} chats');
+    debugPrint('🔒 Filtering for chat_ids: $chatIds');
 
     _mainChannel = _supabase.channel(channelName);
 
-    // Subscribe to INSERT events for messages in ANY of user's chats
+    // Subscribe to INSERT events with filter for user's chats
+    // NOTE: Server-side RLS is the authoritative security layer.
+    // This filter is defense-in-depth to reduce unnecessary processing.
     _mainChannel!.onPostgresChanges(
       event: PostgresChangeEvent.insert,
       schema: 'public',
       table: 'messages',
+      filter: chatIds.length == 1 
+          ? PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'chat_id',
+              value: chatIds.first,
+            )
+          : PostgresChangeFilter(
+              type: PostgresChangeFilterType.inFilter,
+              column: 'chat_id',
+              value: chatIds,
+            ),
       callback: (payload) {
-        debugPrint('📨 New message received via Realtime');
-        _handleNewMessage(payload);
+        final chatId = payload.newRecord['chat_id'] as int?;
+        // Defense-in-depth: validate the message is for a subscribed chat
+        if (chatId != null && _subscribedChatIds.contains(chatId)) {
+          debugPrint('📨 New message received via Realtime for chat $chatId');
+          _handleNewMessage(payload);
+        } else {
+          debugPrint('⚠️ Received message for unsubscribed chat $chatId - ignoring');
+        }
       },
     );
 
-    // Subscribe to UPDATE events (for edited messages)
+    // Subscribe to UPDATE events with filter
     _mainChannel!.onPostgresChanges(
       event: PostgresChangeEvent.update,
       schema: 'public',
       table: 'messages',
+      filter: chatIds.length == 1 
+          ? PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'chat_id',
+              value: chatIds.first,
+            )
+          : PostgresChangeFilter(
+              type: PostgresChangeFilterType.inFilter,
+              column: 'chat_id',
+              value: chatIds,
+            ),
       callback: (payload) {
         debugPrint('✏️ Message updated via Realtime');
         _handleMessageUpdate(payload);
       },
     );
 
-    // Subscribe to DELETE events
+    // Subscribe to DELETE events with filter
     _mainChannel!.onPostgresChanges(
       event: PostgresChangeEvent.delete,
       schema: 'public',
       table: 'messages',
+      filter: chatIds.length == 1 
+          ? PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'chat_id',
+              value: chatIds.first,
+            )
+          : PostgresChangeFilter(
+              type: PostgresChangeFilterType.inFilter,
+              column: 'chat_id',
+              value: chatIds,
+            ),
       callback: (payload) {
         debugPrint('🗑️ Message deleted via Realtime');
         _handleMessageDelete(payload);
@@ -192,7 +237,7 @@ class GlobalChatManager {
     // Subscribe to channel
     await _mainChannel!.subscribe();
 
-    debugPrint('✅ Subscribed to Realtime channel');
+    debugPrint('✅ Subscribed to Realtime channel with chat_id filter');
   }
 
   /// Load chat summaries for all chats

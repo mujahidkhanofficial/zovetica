@@ -1,10 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:drift/drift.dart';
+import 'package:uuid/uuid.dart';
 import '../local/database.dart';
 import '../../core/network/connectivity_service.dart';
 import '../../services/supabase_service.dart';
 import 'chat_repository.dart';
+
+const _uuid = Uuid();
 
 /// Implementation of ChatRepository with offline-first architecture
 /// 
@@ -66,14 +69,18 @@ class ChatRepositoryImpl implements ChatRepository {
     final userId = _currentUserId;
     if (userId == null) throw Exception('User not authenticated');
 
+    // Generate idempotency key for this message (prevents duplicates on retry)
+    final clientMessageId = _uuid.v4();
+
     // 1. Insert to local DB immediately (optimistic UI)
     final localId = await _db.insertPendingMessage(
       chatId: chatId,
       senderId: userId,
       content: content,
+      clientMessageId: clientMessageId,
     );
     
-    debugPrint('💬 Message saved locally (id: $localId), syncing...');
+    debugPrint('💬 Message saved locally (id: $localId, clientId: $clientMessageId), syncing...');
 
     // 2. Update chat's last message locally
     await (_db.update(_db.localChats)..where((c) => c.id.equals(chatId))).write(
@@ -85,17 +92,19 @@ class ChatRepositoryImpl implements ChatRepository {
     );
 
     // 3. Sync to Supabase in background (non-blocking)
-    _syncMessageToRemote(localId, chatId, content, recipientId);
+    _syncMessageToRemote(localId, chatId, content, recipientId, clientMessageId);
 
     return localId;
   }
 
   /// Background sync of a single message to Supabase
+  /// Uses idempotency key to prevent duplicate sends on retry
   Future<void> _syncMessageToRemote(
     int localId,
     int chatId,
     String content,
     String recipientId,
+    String clientMessageId,
   ) async {
     if (!_connectivity.isOnline) {
       debugPrint('📵 Offline - message will sync when online');
@@ -107,12 +116,18 @@ class ChatRepositoryImpl implements ChatRepository {
       await (_db.update(_db.localMessages)..where((m) => m.id.equals(localId)))
           .write(const LocalMessagesCompanion(syncStatus: Value('syncing')));
 
-      // Insert to Supabase
-      final response = await _supabase.from('messages').insert({
-        'chat_id': chatId,
-        'sender_id': _currentUserId,
-        'content': content,
-      }).select().single();
+      // Insert to Supabase with idempotency key
+      // The server has a unique constraint on (chat_id, client_message_id)
+      // so retries will fail gracefully and we can fetch the existing record
+      final response = await _supabase.from('messages').upsert(
+        {
+          'chat_id': chatId,
+          'sender_id': _currentUserId,
+          'content': content,
+          'client_message_id': clientMessageId,
+        },
+        onConflict: 'chat_id,client_message_id',
+      ).select().single();
 
       final remoteId = response['id'] as int;
 
@@ -440,11 +455,14 @@ class ChatRepositoryImpl implements ChatRepository {
         // Get chat to find recipient
         final chat = await getChatById(msg.chatId);
         if (chat?.otherUserId != null) {
+          // Use existing clientMessageId or generate new one for legacy messages
+          final clientMessageId = msg.clientMessageId ?? _uuid.v4();
           await _syncMessageToRemote(
             msg.id,
             msg.chatId,
             msg.content,
             chat!.otherUserId!,
+            clientMessageId,
           );
         }
       }
