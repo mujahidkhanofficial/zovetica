@@ -157,7 +157,10 @@ class _AdminDoctorsScreenState extends State<AdminDoctorsScreen>
             const SizedBox(height: AppSpacing.md),
             Text(
               isPending ? 'No pending verifications' : 'No verified doctors',
-              style: Theme.of(context).textTheme.titleLarge,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: AppColors.charcoal,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ],
         ),

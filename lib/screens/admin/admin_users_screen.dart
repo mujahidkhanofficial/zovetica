@@ -162,7 +162,14 @@ class _UserListTabState extends State<_UserListTab> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
-    if (_users.isEmpty) return const Center(child: Text("No users found"));
+    if (_users.isEmpty) {
+      return const Center(
+        child: Text(
+          "No users found",
+          style: TextStyle(color: AppColors.charcoal, fontWeight: FontWeight.w600),
+        ),
+      );
+    }
 
     return ListView.builder(
       padding: const EdgeInsets.all(AppSpacing.md),

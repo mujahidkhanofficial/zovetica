@@ -206,7 +206,10 @@ class _AdminAppointmentsScreenState extends State<AdminAppointmentsScreen> {
           const SizedBox(height: AppSpacing.md),
           Text(
             'No appointments found',
-            style: Theme.of(context).textTheme.titleLarge,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              color: AppColors.charcoal,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
