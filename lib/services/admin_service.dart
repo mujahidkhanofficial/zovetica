@@ -39,8 +39,8 @@ class AdminService {
   Future<Map<String, dynamic>> _getManualStats() async {
     try {
       final usersCount = await _client.from('users').count(CountOption.exact);
-      final doctorsCount = await _client.from('doctors').count(CountOption.exact);
-      final pendingDoctorsCount = await _client.from('doctor_applications').count(CountOption.exact).eq('status', 'pending');
+      // ✅ CONSISTENCY: Count doctors directly from users table
+      final doctorsCount = await _client.from('users').select().eq('role', 'doctor').count(CountOption.exact);
       final petsCount = await _client.from('pets').count(CountOption.exact);
       final appointmentsCount = await _client.from('appointments').count(CountOption.exact);
       final postsCount = await _client.from('posts').count(CountOption.exact);
@@ -48,13 +48,13 @@ class AdminService {
       return {
         'total_users': usersCount,
         'total_doctors': doctorsCount,
-        'pending_doctors': pendingDoctorsCount,
+        'pending_doctors': 0, // Legacy field, setting to 0
         'total_pets': petsCount,
         'total_appointments': appointmentsCount,
         'total_posts': postsCount,
       };
     } catch (e) {
-      print('Error in manual stats: $e');
+      debugPrint('Error in manual stats: $e');
       return {};
     }
   }
@@ -154,24 +154,9 @@ class AdminService {
         'new_role': roleString,
       });
 
-      // If promoting to doctor, ensure a record exists in the doctors table
+      // Promotion to doctor is now just a role change (metadata-driven)
       if (newRole == UserRole.doctor) {
-        final existingDoctor = await _client
-            .from('doctors')
-            .select()
-            .eq('user_id', userId)
-            .maybeSingle();
-
-        if (existingDoctor == null) {
-          await _client.from('doctors').insert({
-            'user_id': userId,
-            'specialty': 'General', // Default, can be updated later
-            'clinic': 'Not specified',
-            'verified': true, // Admin manually promoted, so auto-verify
-            'verified_at': DateTime.now().toIso8601String(),
-            'verified_by': _client.auth.currentUser?.id,
-          });
-        }
+        debugPrint('ℹ️ User $userId promoted to doctor role');
       }
 
       debugPrint('✅ User $userId role changed to $roleString');
@@ -209,18 +194,15 @@ class AdminService {
     }
   }
 
-  /// Fetches verified doctors.
+  /// Fetches verified doctors (now from users table).
   Future<List<Map<String, dynamic>>> getAllDoctors({
     int page = 0,
     int limit = 20,
     bool? verifiedOnly,
   }) async {
     try {
-      var query = _client.from('doctors').select('*, users(*)');
-
-      if (verifiedOnly == true) {
-        query = query.eq('verified', true);
-      }
+      // ✅ CONSISTENCY: Fetch doctors from users table
+      var query = _client.from('users').select().eq('role', 'doctor');
 
       final response = await query
           .order('created_at', ascending: false)
@@ -228,7 +210,7 @@ class AdminService {
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      print('Error fetching doctors: $e');
+      debugPrint('Error fetching doctors: $e');
       return [];
     }
   }

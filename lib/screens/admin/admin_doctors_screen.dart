@@ -5,8 +5,7 @@ import '../../theme/app_gradients.dart';
 import '../../theme/app_shadows.dart';
 import '../../services/admin_service.dart';
 
-/// Admin Doctor Verification Screen
-/// Allows viewing, approving, and rejecting doctor applications.
+/// Admin Doctors Screen - View all registered doctors
 class AdminDoctorsScreen extends StatefulWidget {
   const AdminDoctorsScreen({super.key});
 
@@ -14,39 +13,25 @@ class AdminDoctorsScreen extends StatefulWidget {
   State<AdminDoctorsScreen> createState() => _AdminDoctorsScreenState();
 }
 
-class _AdminDoctorsScreenState extends State<AdminDoctorsScreen>
-    with SingleTickerProviderStateMixin {
+class _AdminDoctorsScreenState extends State<AdminDoctorsScreen> {
   final AdminService _adminService = AdminService();
-  late TabController _tabController;
 
-  List<Map<String, dynamic>> _pendingDoctors = [];
-  List<Map<String, dynamic>> _verifiedDoctors = [];
+  List<Map<String, dynamic>> _doctors = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
     _loadDoctors();
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
   }
 
   Future<void> _loadDoctors() async {
     setState(() => _isLoading = true);
 
-    // Fetch pending applications from the new table via RPC
-    final pending = await _adminService.getPendingDoctorApplications();
-    // Fetch verified doctors from the doctors table
-    final verified = await _adminService.getAllDoctors(verifiedOnly: true);
+    final doctors = await _adminService.getAllDoctors(verifiedOnly: false);
 
     setState(() {
-      _pendingDoctors = pending;
-      _verifiedDoctors = verified;
+      _doctors = doctors;
       _isLoading = false;
     });
   }
@@ -57,7 +42,7 @@ class _AdminDoctorsScreenState extends State<AdminDoctorsScreen>
       backgroundColor: AppColors.cloud,
       appBar: AppBar(
         title: const Text(
-          'Doctor Verification',
+          'Doctors',
           style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
         centerTitle: true,
@@ -69,386 +54,167 @@ class _AdminDoctorsScreenState extends State<AdminDoctorsScreen>
             gradient: AppGradients.primaryDiagonal,
           ),
         ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(70),
-          child: Container(
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: Colors.white.withAlpha(51),
-              borderRadius: BorderRadius.circular(25),
-              border: Border.all(color: Colors.white.withAlpha(77)),
-            ),
-            child: TabBar(
-              controller: _tabController,
-              indicator: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(21),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withAlpha(26),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              indicatorSize: TabBarIndicatorSize.tab,
-              labelColor: AppColors.primary,
-              unselectedLabelColor: Colors.white,
-              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-              dividerColor: Colors.transparent,
-              tabs: [
-                Tab(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text('Pending'),
-                      if (_pendingDoctors.isNotEmpty) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: const BoxDecoration(
-                            color: AppColors.error,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Text(
-                            '${_pendingDoctors.length}',
-                            style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                const Tab(text: 'Verified'),
-              ],
-            ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: _loadDoctors,
           ),
-        ),
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : TabBarView(
-              controller: _tabController,
-              children: [
-                _buildDoctorList(_pendingDoctors, isPending: true),
-                _buildDoctorList(_verifiedDoctors, isPending: false),
-              ],
-            ),
+          : _doctors.isEmpty
+              ? _buildEmptyState()
+              : RefreshIndicator(
+                  onRefresh: _loadDoctors,
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    itemCount: _doctors.length,
+                    itemBuilder: (context, index) =>
+                        _buildDoctorCard(_doctors[index]),
+                  ),
+                ),
     );
   }
 
-  Widget _buildDoctorList(List<Map<String, dynamic>> doctors, {required bool isPending}) {
-    if (doctors.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              isPending ? Icons.hourglass_empty : Icons.verified,
-              size: 64,
-              color: AppColors.slate,
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.medical_services_outlined,
+              size: 64, color: AppColors.slate.withAlpha(128)),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            'No doctors registered yet',
+            style: TextStyle(
+              fontSize: 16,
+              color: AppColors.charcoal,
+              fontWeight: FontWeight.w500,
             ),
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              isPending ? 'No pending verifications' : 'No verified doctors',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: AppColors.charcoal,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: _loadDoctors,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        itemCount: doctors.length,
-        itemBuilder: (context, index) => _buildDoctorCard(doctors[index], isPending),
-      ),
-    );
-  }
-
-  Widget _buildDoctorCard(Map<String, dynamic> doctor, bool isPending) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
-    // Handle different data structures
-    // Pending: flat structure from RPC (user_name, user_email, clinic_name)
-    // Verified: nested structure from join (users: {name, email}, clinic)
-    
-    String name;
-    String email;
-    String profileImage = '';
-    String specialty;
-    String clinic;
-    String rating = '0.0';
-    String reviewsCount = '0';
-    String id = doctor['id']; // This is application_id for pending, doctor_id for verified
-
-    if (isPending) {
-      name = doctor['user_name'] ?? 'Unknown User';
-      email = doctor['user_email'] ?? '';
-      specialty = doctor['specialty'] ?? 'General';
-      clinic = doctor['clinic_name'] ?? 'Not specified';
-    } else {
-      final userData = doctor['users'] as Map<String, dynamic>?;
-      name = userData?['name'] ?? 'Unknown Doctor';
-      email = userData?['email'] ?? '';
-      profileImage = userData?['profile_image'] ?? '';
-      specialty = doctor['specialty'] ?? 'General';
-      clinic = doctor['clinic'] ?? 'Not specified';
-      rating = doctor['rating']?.toString() ?? '0.0';
-      reviewsCount = doctor['reviews_count']?.toString() ?? '0';
-    }
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.md),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.surfaceDark : Colors.white,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-        boxShadow: isDark ? AppShadows.none : AppShadows.card,
-        border: isDark 
-          ? Border.all(color: AppColors.slate.withOpacity(0.2))
-          : null,
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 30,
-                  backgroundColor: AppColors.secondary.withOpacity(0.1),
-                  backgroundImage: profileImage.isNotEmpty
-                      ? NetworkImage(profileImage)
-                      : null,
-                  child: profileImage.isEmpty
-                      ? const Icon(Icons.person, color: AppColors.secondary)
-                      : null,
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        email,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: isPending
-                        ? AppColors.warning.withOpacity(0.2)
-                        : AppColors.success.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        isPending ? Icons.pending : Icons.verified,
-                        size: 16,
-                        color: isPending ? AppColors.warning : AppColors.success,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        isPending ? 'Pending' : 'Verified',
-                        style: TextStyle(
-                          color: isPending ? AppColors.warning : AppColors.success,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: AppSpacing.md),
-            const Divider(),
-            const SizedBox(height: AppSpacing.md),
-
-            // Details
-            Row(
-              children: [
-                Expanded(
-                  child: _buildDetailItem(Icons.medical_services, 'Specialty', specialty),
-                ),
-                Expanded(
-                  child: _buildDetailItem(Icons.location_on, 'Clinic', clinic),
-                ),
-              ],
-            ),
-
-            if (!isPending) ...[
-              const SizedBox(height: AppSpacing.md),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildDetailItem(Icons.star, 'Rating', rating),
-                  ),
-                  Expanded(
-                    child: _buildDetailItem(Icons.rate_review, 'Reviews', reviewsCount),
-                  ),
-                ],
-              ),
-            ],
-
-            // Actions for pending doctors
-            if (isPending) ...[
-              const SizedBox(height: AppSpacing.lg),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.error,
-                        side: const BorderSide(color: AppColors.error),
-                      ),
-                      onPressed: () => _showRejectDialog(doctor['id']),
-                      icon: const Icon(Icons.close),
-                      label: const Text('Reject'),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.success,
-                      ),
-                      onPressed: () => _approveDoctor(doctor['id']),
-                      icon: const Icon(Icons.check),
-                      label: const Text('Approve'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDetailItem(IconData icon, String label, String value) {
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: AppColors.slate),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: AppColors.slate,
-                ),
-              ),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w500,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _approveDoctor(String applicationId) async {
-    final success = await _adminService.approveDoctorApplication(applicationId);
-    if (success) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Doctor approved successfully!'),
-            backgroundColor: AppColors.success,
-          ),
-        );
-      }
-      _loadDoctors();
-    }
-  }
-
-  Future<void> _showRejectDialog(String doctorId) async {
-    final reasonController = TextEditingController();
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Reject Doctor Application'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Please provide a reason for rejection:'),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: reasonController,
-              decoration: const InputDecoration(
-                labelText: 'Rejection Reason',
-                hintText: 'e.g., Invalid credentials...',
-              ),
-              maxLines: 3,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Reject'),
           ),
         ],
       ),
     );
+  }
 
-    if (confirmed == true && reasonController.text.isNotEmpty) {
-      final success = await _adminService.rejectDoctorApplication(
-        doctorId, // This is actually applicationId in the pending context
-        reasonController.text,
-      );
-      if (success && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Doctor application rejected'),
-          ),
-        );
-        _loadDoctors();
-      }
-    }
+  Widget _buildDoctorCard(Map<String, dynamic> doctor) {
+    final name = doctor['name'] ?? 'Unknown Doctor';
+    final specialty = doctor['specialty'] ?? 'General';
+    final email = doctor['email'] ?? '';
+    final clinic = doctor['clinic'] ?? '';
+    final isVerified = doctor['verified'] == true;
 
-    reasonController.dispose();
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: AppShadows.card,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Row(
+          children: [
+            // Avatar
+            CircleAvatar(
+              radius: 28,
+              backgroundColor: AppColors.primary.withAlpha(30),
+              child: Text(
+                name.isNotEmpty ? name[0].toUpperCase() : 'D',
+                style: const TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            // Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: AppColors.charcoal,
+                          ),
+                        ),
+                      ),
+                      if (isVerified)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppColors.success.withAlpha(30),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.verified,
+                                  size: 14, color: AppColors.success),
+                              SizedBox(width: 4),
+                              Text(
+                                'Verified',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.success,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    specialty,
+                    style: const TextStyle(
+                      color: AppColors.slate,
+                      fontSize: 14,
+                    ),
+                  ),
+                  if (email.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      email,
+                      style: TextStyle(
+                        color: AppColors.slate.withAlpha(180),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                  if (clinic.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(Icons.local_hospital_outlined,
+                            size: 14, color: AppColors.slate.withAlpha(180)),
+                        const SizedBox(width: 4),
+                        Text(
+                          clinic,
+                          style: TextStyle(
+                            color: AppColors.slate.withAlpha(180),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

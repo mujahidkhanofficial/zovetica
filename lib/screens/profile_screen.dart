@@ -55,6 +55,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final PostRepository _postRepo = PostRepository.instance;
   final UserRepository _userRepo = UserRepository.instance;
   
+  // Double-tap like overlay state
+  final Map<int, bool> _showHeartOverlay = {};
+  
   Map<String, dynamic> _userInfo = {};
   List<Pet> _pets = [];
   List<Post> _userPosts = [];
@@ -542,7 +545,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  @override
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1170,8 +1172,18 @@ Widget _buildPetTag(String label, Color color) {
       }
     });
 
-    // Offline-first Repo Update
-    await _postRepo.toggleLike(post.id, oldIsLiked, oldLikesCount);
+    // Offline-first Repo Update - handle failure
+    final success = await _postRepo.toggleLike(post.id, oldIsLiked, oldLikesCount);
+    if (!success && mounted) {
+      // Revert UI on failure
+      setState(() {
+        final index = _userPosts.indexWhere((p) => p.id == post.id);
+        if (index != -1) {
+          _userPosts[index] = post;
+        }
+      });
+      AppNotifications.showError(context, 'Could not update like');
+    }
   }
 
   void _showCommentsSheet(Post post) {
@@ -1213,12 +1225,46 @@ Widget _buildPetTag(String label, Color color) {
     );
   }
 
+  void _handleDoubleTapLike(Post post) {
+    // Only like if not already liked (Instagram/Facebook behavior)
+    if (post.isLiked) {
+      // Already liked - just show animation without toggling
+      setState(() {
+        _showHeartOverlay[post.id] = true;
+      });
+      Future.delayed(const Duration(milliseconds: 800), () {
+        if (mounted) {
+          setState(() {
+            _showHeartOverlay[post.id] = false;
+          });
+        }
+      });
+      return;
+    }
+    
+    _toggleLike(post);
+    
+    // Show heart overlay animation
+    setState(() {
+      _showHeartOverlay[post.id] = true;
+    });
+    
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (mounted) {
+        setState(() {
+          _showHeartOverlay[post.id] = false;
+        });
+      }
+    });
+  }
+
   Widget _buildPostItem(Post post) {
     return PostCard(
       post: post,
       onLike: () => _toggleLike(post),
       onComment: () => _showCommentsSheet(post),
-      showHeartOverlay: false,
+      onDoubleTap: () => _handleDoubleTapLike(post),
+      showHeartOverlay: _showHeartOverlay[post.id] == true,
       onMoreOptions: _isCurrentUser ? () => _showPostOptionsMenu(post) : null,
     );
   }

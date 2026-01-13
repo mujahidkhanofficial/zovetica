@@ -43,8 +43,8 @@ class DoctorRepository {
   /// Map Doctor model to Drift companion
   LocalDoctorsCompanion _mapDoctorToCompanion(Doctor doctor) {
     return LocalDoctorsCompanion(
-      id: Value(doctor.id),
-      userId: Value(doctor.userId ?? ''), // Correctly map User ID
+      id: Value(doctor.id),                   // Doctor record ID
+      userId: Value(doctor.userId ?? ''),      // Auth User ID
       name: Value(doctor.name),
       specialty: Value(doctor.specialty),
       clinic: Value(doctor.clinic),
@@ -53,7 +53,7 @@ class DoctorRepository {
       profileImage: Value(doctor.image),
       nextAvailable: Value(doctor.nextAvailable),
       available: Value(doctor.available),
-      verified: const Value(false),
+      verified: const Value(true),             // Fetched doctors are verified
       createdAt: Value(DateTime.now()),
       isSynced: const Value(true),
     );

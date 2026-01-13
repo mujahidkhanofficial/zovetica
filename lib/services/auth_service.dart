@@ -31,8 +31,9 @@ class AuthService {
     required String name,
     required String username,
     String? phone,
-    // NOTE: role, specialty, clinic are NOT passed to Supabase
-    // They must be set via admin operations after signup
+    String? role,
+    String? specialty,
+    String? clinic,
   }) async {
     final response = await _client.auth.signUp(
       email: email,
@@ -42,8 +43,9 @@ class AuthService {
         'full_name': name,
         'username': username,
         'phone': phone,
-        // ❌ SECURITY: DO NOT include role here - prevents privilege escalation
-        // Role is set to 'pet_owner' by database trigger ONLY
+        'role': role ?? 'pet_owner',
+        'specialty': specialty,
+        'clinic': clinic,
       },
     );
     

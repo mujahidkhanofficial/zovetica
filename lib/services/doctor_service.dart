@@ -5,37 +5,37 @@ import 'supabase_service.dart';
 /// Doctor service for listing and profile operations
 class DoctorService {
   final _client = SupabaseService.client;
-  static const String _tableName = 'users'; // Doctors are users with role 'doctor'
 
-  /// Get all verified doctors
+  /// Get all verified doctors directly from the users table
   Future<List<Doctor>> getDoctors() async {
     try {
-      // Fetch directly from 'users' table where role is 'doctor'
+      // Fetch from 'users' table where role is 'doctor'
+      // We use the 'users' table for both pet owners and doctors now
       final response = await _client
           .from('users')
           .select()
           .eq('role', 'doctor')
-          .order('id');
+          .order('rating', ascending: false);
       
-      return (response as List).map((data) => _mapUserDataToDoctor(data)).toList();
+      return (response as List).map((data) => _mapDoctorData(data)).toList();
     } catch (e) {
       debugPrint('Error fetching doctors: $e');
       return [];
     }
   }
 
-  Doctor _mapUserDataToDoctor(Map<String, dynamic> data) {
+  Doctor _mapDoctorData(Map<String, dynamic> data) {
     return Doctor(
-      id: data['id']?.toString() ?? '', 
-      name: data['name'] ?? 'Unknown Doctor',
+      id: data['id']?.toString() ?? '',       // User ID is also the Doctor ID now
+      userId: data['id']?.toString(),
+      name: data['name'] ?? 'Doctor',
       specialty: data['specialty'] ?? 'General Veterinarian',
       rating: (data['rating'] is num) ? (data['rating'] as num).toDouble() : 0.0,
       reviews: data['reviews_count'] ?? 0,
-      nextAvailable: 'Available',
+      nextAvailable: 'Available', // Can be refined later
       clinic: data['clinic'] ?? 'Zovetica Clinic',
       image: data['profile_image'] ?? '',
-      available: true,
-      userId: data['id']?.toString(), // For users table, id IS the user_id
+      available: true, // Default to true if not specified
     );
   }
 }

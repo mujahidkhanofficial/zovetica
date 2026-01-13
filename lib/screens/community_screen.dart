@@ -133,18 +133,11 @@ class _CommunityScreenState extends State<CommunityScreen>
     
     final post = _posts[postIndex];
     
-    // 1. Optimistic UI update
+    // 1. Optimistic UI update using copyWith to preserve all fields
     setState(() {
-      _posts[postIndex] = Post(
-        id: post.id,
-        author: post.author,
-        content: post.content,
-        imageUrl: post.imageUrl,
-        timestamp: post.timestamp,
-        likesCount: post.isLiked ? post.likesCount - 1 : post.likesCount + 1,
-        commentsCount: post.commentsCount,
+      _posts[postIndex] = post.copyWith(
         isLiked: !post.isLiked,
-        tags: post.tags,
+        likesCount: post.isLiked ? post.likesCount - 1 : post.likesCount + 1,
       );
     });
 
@@ -155,23 +148,41 @@ class _CommunityScreenState extends State<CommunityScreen>
       });
     }
 
-    // 3. Delegate to repository
-    // Note: The repository handles sync and reversion on failure internally
-    // We pass the OLD state (layout before toggle) to allow revert if needed
-    await _postRepo.toggleLike(postId, post.isLiked, post.likesCount);
+    // 3. Delegate to repository and handle failure
+    final success = await _postRepo.toggleLike(postId, post.isLiked, post.likesCount);
+    if (!success && mounted) {
+      // Revert UI on failure
+      setState(() {
+        _posts[postIndex] = post;
+      });
+      AppNotifications.showError(context, 'Could not update like');
+    }
   }
 
   // Double Tap Animation State
   final Map<int, AnimationController> _doubleTapControllers = {};
   
   void _handleDoubleTapLike(int postId) {
+    // Only like if not already liked (Instagram/Facebook behavior)
+    final post = _posts.firstWhere((p) => p.id == postId, orElse: () => _posts.first);
+    if (post.id != postId || post.isLiked) {
+      // Already liked or not found - just show animation without toggling
+      setState(() {
+        _showHeartOverlay[postId] = true;
+      });
+      Future.delayed(const Duration(milliseconds: 800), () {
+        if (mounted) {
+          setState(() {
+            _showHeartOverlay[postId] = false;
+          });
+        }
+      });
+      return;
+    }
+    
     _toggleLike(postId);
     
-    // Trigger animation for specific post in a real app, 
-    // but for now we'll simulate a general 'heart' overlay effect on the current post or manage state better.
-    // Simplification: We'll just rely on the feed update for now, 
-    // or we can add a local "showHeart" state per post if we want the overlay.
-    // Let's implement a simple overlay in the build method using a state map.
+    // Show heart overlay animation
     setState(() {
       _showHeartOverlay[postId] = true;
     });

@@ -117,14 +117,64 @@ class AppointmentService {
     if (userId == null) return [];
 
     try {
-      // Join with doctors table, then get user info from doctors.user_id
+      // 1. Fetch raw appointments and pet info
       final response = await _client
           .from(_tableName)
-          .select('*, pets(*), doctors!appointments_doctor_id_fkey(*, users(*))')
+          .select('*, pets(*)')
           .eq('user_id', userId)
           .order('date', ascending: true);
 
-      return _parseAppointmentsWithDoctors(response);
+      final appointments = <Appointment>[];
+      
+      for (var data in (response as List)) {
+        // 2. Resolve Doctor Info (User ID might be stored or Doctor ID)
+        final doctorId = data['doctor_id']?.toString();
+        Map<String, dynamic>? doctorInfo;
+        
+        if (doctorId != null) {
+          // Try fetching directly from users first (New Flow)
+          try {
+            doctorInfo = await _client
+                .from('users')
+                .select()
+                .eq('id', doctorId)
+                .maybeSingle();
+          } catch (_) {}
+          
+          // If not found in users (or wrong UUID type), try resolving via doctors table (Legacy Flow)
+          if (doctorInfo == null) {
+            final resolvedId = await _getDoctorIdFromUserId(doctorId);
+            if (resolvedId != null && resolvedId != doctorId) {
+               doctorInfo = await _client
+                  .from('users')
+                  .select()
+                  .eq('id', resolvedId)
+                  .maybeSingle();
+            }
+          }
+        }
+
+        final petData = data['pets'] ?? {};
+        
+        appointments.add(Appointment(
+          id: data['id']?.toString() ?? '',
+          uuid: data['id']?.toString(),
+          doctorId: doctorId,
+          doctor: doctorInfo?['name'] ?? 'Doctor',
+          doctorImage: doctorInfo?['profile_image'],
+          clinic: doctorInfo?['clinic'] ?? 'Zovetica Clinic',
+          date: data['date'] ?? '',
+          time: data['time'] ?? '',
+          pet: petData['name'] ?? 'Pet',
+          type: data['type'] ?? '',
+          status: data['status'] ?? 'pending',
+          petId: petData['id']?.toString(),
+          petImage: petData['image_url'],
+          ownerId: userId,
+        ));
+      }
+
+      return appointments;
     } catch (e) {
       debugPrint('Error fetching appointments: $e');
       return [];
@@ -481,23 +531,25 @@ class AppointmentService {
   }
 
   /// Helper: Get the doctor table ID from the user ID
-  /// Since doctors are stored in both 'users' (user_id) and 'doctors' (doctor_id) tables
+  /// Since we are merging doctor info into the 'users' table, the User ID IS the Doctor ID.
   Future<String?> _getDoctorIdFromUserId(String userId) async {
+    // Legacy support: We still check if a record in 'doctors' exists to avoid breaking existing data.
+    // But for all new signups and future-proof design, User ID = Doctor ID.
     try {
-      debugPrint('🔍 Resolving Doctor ID for User ID: $userId');
       final response = await _client
           .from('doctors')
           .select('id')
           .eq('user_id', userId)
           .maybeSingle();
       
-      final foundId = response?['id']?.toString();
-      debugPrint('✅ Resolved Doctor ID: $foundId');
-      return foundId;
+      if (response != null) {
+        return response['id']?.toString();
+      }
     } catch (e) {
-      debugPrint('❌ Error getting doctor ID: $e');
-      return null;
+      debugPrint('ℹ️ Doctor table lookup failed, falling back to User ID: $e');
     }
+    
+    return userId;
   }
 
   /// Get available slots for a doctor (accepts user_id, resolves to doctor_id if needed)

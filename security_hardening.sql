@@ -157,8 +157,13 @@ CREATE POLICY "Public user profiles viewable"
   ON public.users FOR SELECT
   USING (true);
 
--- INSERT: Only auth trigger can insert (via SECURITY DEFINER)
--- No direct inserts allowed from client
+-- INSERT: Allow users to create their own profile record
+CREATE POLICY "Users can insert own profile"
+  ON public.users FOR INSERT
+  WITH CHECK (
+    auth.uid() = id
+    AND role IN ('pet_owner', 'doctor') -- Prevent unauthorized role assignment
+  );
 
 -- UPDATE: Users can update own NON-PRIVILEGED fields
 CREATE POLICY "Users can update own non-privileged fields"

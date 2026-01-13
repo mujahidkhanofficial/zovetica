@@ -62,118 +62,26 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
     if (user == null) return;
 
     try {
-      final localDoc = await _appointmentRepo.getDoctorByUserId(user.id);
+      // ✅ CONSISTENCY: User ID IS the Doctor ID now. No more middle-table mapping.
+      _doctorId = user.id;
+      _appointmentsStream = _appointmentRepo.watchDoctorAppointments(_doctorId!);
       
-      if (localDoc != null) {
-        _doctorId = localDoc.id;
-        _appointmentsStream = _appointmentRepo.watchDoctorAppointments(_doctorId!); // Init Stream immediately
-        
-        if (mounted) setState(() => _isLoading = false);
-        
-        await Future.wait([
-          _fetchDoctorInfo(),
-          _fetchAvailability(forceRefresh: false),
-        ]);
-        
-        _syncDoctorProfile(user.id);
-      } else {
-        await _syncDoctorProfile(user.id);
-        if (mounted) setState(() => _isLoading = false);
-        
-        if (_doctorId != null) {
-           _appointmentsStream = _appointmentRepo.watchDoctorAppointments(_doctorId!); // Init Stream
-          await Future.wait([
-            _fetchDoctorInfo(),
-            _fetchAvailability(),
-          ]);
-        }
-      }
-
+      if (mounted) setState(() => _isLoading = false);
+      
+      // Load info from users table (includes specialty, clinic, etc.)
+      await _fetchDoctorInfo();
+      
+      // Fetch availability (repo handles userId vs doctorId resolution for now)
+      await _fetchAvailability(forceRefresh: true);
+      
       _setupRealtimeSubscription();
-
     } catch (e) {
       debugPrint('Error initializing doctor profile: $e');
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _syncDoctorProfile(String userId) async {
-    try {
-      final response = await SupabaseService.client
-          .from('doctors')
-          .select()
-          .eq('user_id', userId)
-          .maybeSingle();
 
-      if (response != null) {
-        final syncedId = response['id'];
-        
-        if (_doctorId != null && _doctorId != syncedId) {
-             debugPrint("⚠️ Doctor ID Mismatch Detected! Local: $_doctorId vs Remote: $syncedId");
-             await _appointmentRepo.deleteDoctor(_doctorId!);
-             
-             if (mounted) {
-               setState(() {
-                 _doctorId = syncedId;
-                 _appointmentsStream = _appointmentRepo.watchDoctorAppointments(_doctorId!);
-               });
-             }
-             Future.microtask(() => _appointmentRepo.syncDoctorAppointments(_doctorId!));
-        }
-
-        _doctorId = syncedId;
-        _appointmentsStream ??= _appointmentRepo.watchDoctorAppointments(_doctorId!);
-        
-        await _appointmentRepo.upsertDoctor(LocalDoctorsCompanion(
-           id: Value(response['id']),
-           userId: Value(userId),
-           name: Value(response['name'] ?? 'Doctor'),
-           specialty: Value(response['specialty']),
-           clinic: Value(response['clinic']),
-           available: Value(response['available'] ?? true),
-           verified: Value(response['verified'] ?? false),
-           createdAt: Value(DateTime.now()),
-           isSynced: const Value(true),
-        ));
-      } else {
-        // Auto-register logic (for new doctors)
-         final newDoctor = await SupabaseService.client
-            .from('doctors')
-            .insert({
-              'user_id': userId,
-              'specialty': 'General Practitioner',
-              'clinic': 'Zovetica Virtual Clinic',
-              'available': true,
-              'verified': true,
-            })
-            .select()
-            .single();
-            
-        _doctorId = newDoctor['id'];
-        
-        // Cache new doctor
-         await _appointmentRepo.upsertDoctor(LocalDoctorsCompanion(
-          id: Value(newDoctor['id']),
-          userId: Value(userId),
-           name: Value('Doctor'),
-           specialty: Value('General Practitioner'),
-           clinic: Value('Zovetica Virtual Clinic'),
-          available: const Value(true),
-          verified: const Value(true),
-          createdAt: Value(DateTime.now()),
-          isSynced: const Value(true),
-        ));
-
-        // Update role
-        await SupabaseService.client
-          .from('users')
-          .update({'role': 'doctor'})
-          .eq('id', userId);
-      }
-    } catch (e) {
-      debugPrint('Error syncing doctor profile: $e');
-    }
-  }
 
   Future<void> _fetchDoctorInfo() async {
     try {
@@ -825,9 +733,7 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
             TextButton(
               onPressed: () {
                 Navigator.pop(ctx);
-                _syncDoctorProfile(_authService.currentUser!.id).then((_) {
-                  _fetchAppointments(forceRefresh: true);
-                });
+                _fetchAppointments(forceRefresh: true);
               }, 
               child: const Text("Force Sync")
             ),

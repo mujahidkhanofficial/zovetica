@@ -1,6 +1,24 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
 
+CREATE TABLE public.admin_audit_log (
+  id bigint NOT NULL DEFAULT nextval('admin_audit_log_id_seq'::regclass),
+  admin_id uuid NOT NULL,
+  action text NOT NULL,
+  target_table text NOT NULL,
+  target_id text,
+  old_value jsonb,
+  new_value jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT admin_audit_log_pkey PRIMARY KEY (id),
+  CONSTRAINT admin_audit_log_admin_id_fkey FOREIGN KEY (admin_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.admin_directory (
+  id uuid NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT admin_directory_pkey PRIMARY KEY (id),
+  CONSTRAINT admin_directory_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
+);
 CREATE TABLE public.appointments (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   user_id uuid,
@@ -13,9 +31,9 @@ CREATE TABLE public.appointments (
   created_at timestamp with time zone DEFAULT now(),
   price integer DEFAULT 0,
   CONSTRAINT appointments_pkey PRIMARY KEY (id),
-  CONSTRAINT appointments_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
   CONSTRAINT appointments_doctor_id_fkey FOREIGN KEY (doctor_id) REFERENCES public.doctors(id),
-  CONSTRAINT appointments_pet_id_fkey FOREIGN KEY (pet_id) REFERENCES public.pets(id)
+  CONSTRAINT appointments_pet_id_fkey FOREIGN KEY (pet_id) REFERENCES public.pets(id),
+  CONSTRAINT appointments_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
 );
 CREATE TABLE public.availability_slots (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -51,6 +69,22 @@ CREATE TABLE public.comment_likes (
   CONSTRAINT comment_likes_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT comment_likes_comment_id_fkey FOREIGN KEY (comment_id) REFERENCES public.post_comments(id)
 );
+CREATE TABLE public.doctor_applications (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL UNIQUE,
+  specialty text NOT NULL,
+  clinic_name text NOT NULL,
+  license_number text,
+  years_experience integer,
+  status text DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])),
+  submitted_at timestamp with time zone DEFAULT now(),
+  reviewed_at timestamp with time zone,
+  reviewed_by uuid,
+  rejection_reason text,
+  CONSTRAINT doctor_applications_pkey PRIMARY KEY (id),
+  CONSTRAINT doctor_applications_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
+  CONSTRAINT doctor_applications_reviewed_by_fkey FOREIGN KEY (reviewed_by) REFERENCES public.users(id)
+);
 CREATE TABLE public.doctors (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   user_id uuid,
@@ -62,6 +96,9 @@ CREATE TABLE public.doctors (
   next_available text,
   verified boolean DEFAULT false,
   created_at timestamp with time zone DEFAULT now(),
+  rejection_reason text,
+  verified_at timestamp with time zone,
+  verified_by uuid,
   CONSTRAINT doctors_pkey PRIMARY KEY (id),
   CONSTRAINT doctors_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
 );
@@ -82,23 +119,46 @@ CREATE TABLE public.messages (
   content text NOT NULL,
   created_at timestamp with time zone DEFAULT now(),
   edited_at timestamp with time zone,
+  updated_at timestamp with time zone DEFAULT now(),
+  deleted_at timestamp with time zone,
+  client_message_id uuid,
+  status text DEFAULT 'sent'::text CHECK (status = ANY (ARRAY['pending'::text, 'sent'::text, 'delivered'::text, 'read'::text, 'failed'::text])),
+  delivered_at timestamp with time zone,
+  read_at timestamp with time zone,
   CONSTRAINT messages_pkey PRIMARY KEY (id),
   CONSTRAINT messages_chat_id_fkey FOREIGN KEY (chat_id) REFERENCES public.chats(id),
   CONSTRAINT messages_sender_id_fkey FOREIGN KEY (sender_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.notification_preferences (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  user_id uuid NOT NULL UNIQUE,
+  enable_messages boolean DEFAULT true,
+  enable_appointments boolean DEFAULT true,
+  enable_community boolean DEFAULT true,
+  enable_reminders boolean DEFAULT true,
+  enable_quiet_hours boolean DEFAULT false,
+  quiet_hours_start time without time zone DEFAULT '22:00:00'::time without time zone,
+  quiet_hours_end time without time zone DEFAULT '08:00:00'::time without time zone,
+  enable_sound boolean DEFAULT true,
+  enable_vibration boolean DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT notification_preferences_pkey PRIMARY KEY (id),
+  CONSTRAINT notification_preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
 CREATE TABLE public.notifications (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   user_id uuid NOT NULL,
   actor_id uuid,
-  type text NOT NULL CHECK (type = ANY (ARRAY['like'::text, 'comment'::text, 'message'::text])),
+  type text NOT NULL CHECK (type = ANY (ARRAY['message'::text, 'appointment_accepted'::text, 'appointment_rejected'::text, 'appointment_rescheduled'::text, 'appointment_reminder'::text, 'appointment_request'::text, 'appointment_cancelled'::text, 'community_like'::text, 'community_comment'::text, 'follow'::text, 'friend_request'::text])),
   title text NOT NULL,
   body text NOT NULL,
-  related_id bigint,
-  is_read boolean DEFAULT false,
+  related_id uuid,
+  is_read boolean NOT NULL DEFAULT false,
   created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
   CONSTRAINT notifications_pkey PRIMARY KEY (id),
-  CONSTRAINT notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
-  CONSTRAINT notifications_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES auth.users(id)
+  CONSTRAINT notifications_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES auth.users(id),
+  CONSTRAINT notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
 CREATE TABLE public.pet_health_events (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
@@ -160,8 +220,13 @@ CREATE TABLE public.posts (
   author_name text,
   author_image text,
   location text,
+  is_flagged boolean DEFAULT false,
+  flagged_at timestamp with time zone,
+  flagged_reason text,
+  moderated_by uuid,
   CONSTRAINT posts_pkey PRIMARY KEY (id),
-  CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+  CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT posts_moderated_by_fkey FOREIGN KEY (moderated_by) REFERENCES auth.users(id)
 );
 CREATE TABLE public.reviews (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
@@ -179,7 +244,7 @@ CREATE TABLE public.users (
   email text NOT NULL UNIQUE,
   name text,
   phone text,
-  role text DEFAULT 'pet_owner'::text,
+  role text DEFAULT 'pet_owner'::text CHECK (role = ANY (ARRAY['pet_owner'::text, 'doctor'::text, 'admin'::text, 'super_admin'::text])),
   profile_image text,
   specialty text,
   clinic text,
@@ -188,5 +253,48 @@ CREATE TABLE public.users (
   username text UNIQUE,
   rating numeric DEFAULT NULL::numeric,
   reviews_count integer DEFAULT 0,
-  CONSTRAINT users_pkey PRIMARY KEY (id)
+  banned_at timestamp with time zone,
+  banned_reason text,
+  banned_by uuid,
+  CONSTRAINT users_pkey PRIMARY KEY (id),
+  CONSTRAINT users_banned_by_fkey FOREIGN KEY (banned_by) REFERENCES auth.users(id)
 );
+
+-- ============================================================================
+-- SECURE ACCOUNT DELETION RPC
+-- ============================================================================
+-- CREATE OR REPLACE FUNCTION public.delete_own_account()
+-- RETURNS json
+-- LANGUAGE plpgsql
+-- SECURITY DEFINER
+-- SET search_path = public, auth
+-- AS $$
+-- DECLARE v_user_id uuid;
+-- BEGIN
+--   v_user_id := auth.uid();
+--   IF v_user_id IS NULL THEN RETURN json_build_object('success', false, 'error', 'Not authenticated'); END IF;
+--   
+--   DELETE FROM public.notifications WHERE user_id = v_user_id OR actor_id = v_user_id;
+--   DELETE FROM public.messages WHERE sender_id = v_user_id;
+--   DELETE FROM public.chat_participants WHERE user_id = v_user_id;
+--   DELETE FROM public.comment_likes WHERE user_id = v_user_id;
+--   DELETE FROM public.post_likes WHERE user_id = v_user_id;
+--   DELETE FROM public.post_comments WHERE user_id = v_user_id;
+--   DELETE FROM public.posts WHERE user_id = v_user_id;
+--   DELETE FROM public.pet_health_events WHERE pet_id IN (SELECT id FROM public.pets WHERE owner_id = v_user_id);
+--   DELETE FROM public.appointments WHERE user_id = v_user_id OR pet_id IN (SELECT id FROM public.pets WHERE owner_id = v_user_id);
+--   DELETE FROM public.pets WHERE owner_id = v_user_id;
+--   DELETE FROM public.friendships WHERE requester_id = v_user_id OR receiver_id = v_user_id;
+--   DELETE FROM public.reviews WHERE user_id = v_user_id OR doctor_id = v_user_id;
+--   DELETE FROM public.availability_slots WHERE doctor_id IN (SELECT id FROM public.doctors WHERE user_id = v_user_id);
+--   DELETE FROM public.doctors WHERE user_id = v_user_id;
+--   DELETE FROM public.doctor_applications WHERE user_id = v_user_id;
+--   DELETE FROM public.notification_preferences WHERE user_id = v_user_id;
+--   DELETE FROM public.users WHERE id = v_user_id;
+--   DELETE FROM auth.users WHERE id = v_user_id;
+--   
+--   RETURN json_build_object('success', true);
+-- EXCEPTION WHEN OTHERS THEN
+--   RETURN json_build_object('success', false, 'error', SQLERRM);
+-- END;
+-- $$;

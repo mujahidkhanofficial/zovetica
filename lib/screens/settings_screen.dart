@@ -632,6 +632,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   .rpc('delete_own_account');
                                   
                               debugPrint('✅ Server deletion response: $response');
+
+                              // Check if RPC returned success
+                              final bool success = response is Map && response['success'] == true;
+                              
+                              if (!success) {
+                                throw Exception(response is Map ? response['error'] : 'Unknown deletion error');
+                              }
                               
                               // 3. Sign out (just in case RPC didn't kill session)
                               await SupabaseService.client.auth.signOut();
@@ -644,14 +651,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               }
                             } catch (e) {
                               debugPrint('❌ Account deletion error: $e');
-                              rethrow;
+                              if (context.mounted) {
+                                setDialogState(() => isDeleting = false);
+                                AppNotifications.showError(
+                                  context, 
+                                  'Deletion failed: ${e.toString().replaceAll('Exception:', '').trim()}'
+                                );
+                              }
                             }
                           } catch (e) {
                             if (context.mounted) {
                               setDialogState(() => isDeleting = false);
                               final errorMsg = e.toString().toLowerCase().contains('invalid')
                                   ? 'Incorrect password'
-                                  : 'Something went wrong. Please try again.';
+                                  : 'Verification failed. Please try again.';
                               AppNotifications.showError(context, errorMsg);
                             }
                           }

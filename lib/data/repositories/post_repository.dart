@@ -71,8 +71,8 @@ class PostRepository {
     }
   }
 
-  /// Like/unlike a post (optimistic)
-  Future<void> toggleLike(int postId, bool currentlyLiked, int currentLikes) async {
+  /// Like/unlike a post (optimistic) - returns true on success, false on failure
+  Future<bool> toggleLike(int postId, bool currentlyLiked, int currentLikes) async {
     final newLiked = !currentlyLiked;
     final newCount = newLiked ? currentLikes + 1 : currentLikes - 1;
     
@@ -82,9 +82,11 @@ class PostRepository {
     // Sync to remote
     try {
       await _postService.toggleLike(postId);
+      return true; // Success
     } catch (e) {
       // Revert on failure
       await _db.updatePostLike(postId, currentlyLiked, currentLikes);
+      return false; // Signal failure to caller
     }
   }
 

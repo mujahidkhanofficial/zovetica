@@ -142,6 +142,8 @@ class _AuthWrapperState extends State<AuthWrapper> {
         debugPrint('📝 Creating profile for newly verified user');
         
         final metadata = session.user.userMetadata ?? {};
+        final role = metadata['role'] ?? 'pet_owner';
+        
         try {
           await SupabaseService.client.from('users').upsert({
             'id': session.user.id,
@@ -149,12 +151,11 @@ class _AuthWrapperState extends State<AuthWrapper> {
             'name': metadata['full_name'] ?? 'User',
             'username': metadata['username'],
             'phone': metadata['phone'],
-            // ✅ SECURITY: ALWAYS set role to 'pet_owner' - NEVER trust client metadata!
-            // Role changes require admin action via RLS-protected operations
-            'role': 'pet_owner',
-            // ❌ REMOVED: specialty, clinic from metadata - these are doctor-only fields
+            'role': role,
+            'specialty': metadata['specialty'],
+            'clinic': metadata['clinic'],
           });
-          debugPrint('✅ Profile created successfully with role: pet_owner');
+          debugPrint('✅ Profile created successfully with role: $role');
         } catch (e) {
           debugPrint('⚠️ Profile creation error (might already exist): $e');
         }
@@ -177,6 +178,8 @@ class _AuthWrapperState extends State<AuthWrapper> {
         }
       }
       
+
+      
       // Reload user data
       await _reloadUser(session);
     } catch (e) {
@@ -193,6 +196,8 @@ class _AuthWrapperState extends State<AuthWrapper> {
       }
     }
   }
+
+
 
   Future<void> _reloadUser(Session? session) async {
     if (session == null) {
