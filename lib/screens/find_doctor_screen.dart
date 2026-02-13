@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:zovetica/services/doctor_service.dart';
-import 'package:zovetica/services/user_service.dart';
+import 'package:pets_and_vets/services/doctor_service.dart';
+import 'package:pets_and_vets/services/user_service.dart';
 import '../models/app_models.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_gradients.dart';

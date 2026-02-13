@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'app_colors.dart';
 import 'app_spacing.dart';
 
-/// Zovetica App Theme - Industrial Level Design
+/// Pets & Vets App Theme - Industrial Level Design
 /// Ocean Blue + Mint Green + Sunset Coral
 class AppTheme {
   AppTheme._();

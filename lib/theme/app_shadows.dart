@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Zovetica Design System - Shadows
+/// Pets & Vets Design System - Shadows
 class AppShadows {
   AppShadows._();
 

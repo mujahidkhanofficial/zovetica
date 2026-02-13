@@ -147,7 +147,7 @@ class _SplashScreenState extends State<SplashScreen>
                           child: Padding(
                             padding: const EdgeInsets.all(20),
                             child: Image.asset(
-                              'paw_logo.png',
+                              'logo.png',
                               fit: BoxFit.contain,
                             ),
                           ),
@@ -171,7 +171,7 @@ class _SplashScreenState extends State<SplashScreen>
                       child: Column(
                         children: [
                           Text(
-                            'Zovetica',
+                            'Pets & Vets',
                             style: TextStyle(
                               fontSize: 42,
                               fontWeight: FontWeight.w700,

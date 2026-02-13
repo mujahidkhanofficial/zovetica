@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:zovetica/services/auth_service.dart';
+import 'package:pets_and_vets/services/auth_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/app_notifications.dart';
 import '../widgets/pet_button.dart';

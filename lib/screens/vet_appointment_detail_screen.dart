@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:zovetica/models/appointment_model.dart';
-import 'package:zovetica/models/other_models.dart';
-import 'package:zovetica/services/appointment_service.dart';
-import 'package:zovetica/services/pet_service.dart';
-import 'package:zovetica/theme/app_colors.dart';
-import 'package:zovetica/theme/app_gradients.dart';
-import 'package:zovetica/theme/app_spacing.dart';
-import 'package:zovetica/theme/app_shadows.dart';
-import 'package:zovetica/widgets/cached_avatar.dart';
-import 'package:zovetica/utils/app_notifications.dart';
+import 'package:pets_and_vets/models/appointment_model.dart';
+import 'package:pets_and_vets/models/other_models.dart';
+import 'package:pets_and_vets/services/appointment_service.dart';
+import 'package:pets_and_vets/services/pet_service.dart';
+import 'package:pets_and_vets/theme/app_colors.dart';
+import 'package:pets_and_vets/theme/app_gradients.dart';
+import 'package:pets_and_vets/theme/app_spacing.dart';
+import 'package:pets_and_vets/theme/app_shadows.dart';
+import 'package:pets_and_vets/widgets/cached_avatar.dart';
+import 'package:pets_and_vets/utils/app_notifications.dart';
 
 class VetAppointmentDetailScreen extends StatefulWidget {
   final Appointment appointment;

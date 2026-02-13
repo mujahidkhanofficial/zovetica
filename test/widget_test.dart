@@ -1,11 +1,11 @@
-// This is a basic Flutter widget test for Zovetica.
+// This is a basic Flutter widget test for Pets & Vets.
 //
 // Verifies that the app builds and the splash screen loads correctly.
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
-import 'package:zovetica/main.dart';
-import 'package:zovetica/services/auth_service.dart';
+import 'package:pets_and_vets/main.dart';
+import 'package:pets_and_vets/services/auth_service.dart';
 import 'services/auth_service_test.mocks.dart';
 
 void main() {
@@ -33,13 +33,13 @@ void main() {
     final authService = AuthService(client: mockSupabaseClient);
 
     // Build our app and trigger a frame.
-    await tester.pumpWidget(ZoveticaApp(authService: authService)); // Inject!
+    await tester.pumpWidget(Pets & VetsApp(authService: authService)); // Inject!
 
     // Verify that the splash screen appears (it shows the app title)
     // Give it a moment to build
     await tester.pump();
 
     // The app should build without errors
-    expect(find.byType(ZoveticaApp), findsOneWidget);
+    expect(find.byType(Pets & VetsApp), findsOneWidget);
   });
 }

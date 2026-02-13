@@ -1,4 +1,4 @@
-package com.zovetica.zo
+package com.petsandvets.app
 
 import io.flutter.embedding.android.FlutterActivity
 

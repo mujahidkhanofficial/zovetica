@@ -17,7 +17,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   final List<Map<String, String>> _pages = [
     {
-      'title': 'Welcome to Zovetica',
+      'title': 'Welcome to Pets & Vets',
       'subtitle': 'Smart Healthcare for Your Beloved Pets',
       'image': 'assets/images/onboarding1.png',
     },
@@ -76,7 +76,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           page['image']!,
                           height: 300,
                           errorBuilder: (context, error, stackTrace) => Image.asset(
-                            'paw_logo.png',
+                            'logo.png',
                             height: 150,
                           ),
                        ),

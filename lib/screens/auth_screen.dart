@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:zovetica/screens/auth/login_form.dart';
-import 'package:zovetica/screens/auth/signup_form.dart';
+import 'package:pets_and_vets/screens/auth/login_form.dart';
+import 'package:pets_and_vets/screens/auth/signup_form.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_gradients.dart';
 import '../theme/app_spacing.dart';
@@ -63,7 +63,7 @@ class _AuthScreenState extends State<AuthScreen>
                     child: Padding(
                       padding: const EdgeInsets.all(15),
                       child: Image.asset(
-                        'paw_logo.png',
+                        'logo.png',
                         fit: BoxFit.contain,
                       ),
                     ),
@@ -74,7 +74,7 @@ class _AuthScreenState extends State<AuthScreen>
                 
                 // Welcome Text
                 const Text(
-                  'Welcome to Zovetica',
+                  'Welcome to Pets & Vets',
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.w700,

@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:mockito/annotations.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:zovetica/services/auth_service.dart';
+import 'package:pets_and_vets/services/auth_service.dart';
 
 // Generate mocks using: dart run build_runner build
 @GenerateMocks([SupabaseClient, GoTrueClient])

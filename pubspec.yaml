@@ -1,5 +1,5 @@
-name: zovetica
-description: Smart Healthcare for Your Beloved Pets
+name: pets_and_vets
+description: Pets & Vets - Smart Healthcare for Your Beloved Pets
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -54,9 +54,21 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "paw_logo.png"
+  web:
+    generate: true
+    image_path: "logo.png"
+    background_color: "#1ABC9C"
+    theme_color: "#1ABC9C"
+  windows:
+    generate: true
+    image_path: "logo.png"
+    icon_size: 256
+  macos:
+    generate: true
+    image_path: "logo.png"
+  image_path: "logo.png"
   adaptive_icon_background: "#1ABC9C"
-  adaptive_icon_foreground: "paw_logo.png"
+  adaptive_icon_foreground: "logo.png"
 flutter:
   uses-material-design: true
   
@@ -72,5 +84,5 @@ flutter:
 
   assets:
     - .env
-    - paw_logo.png
-    - paw_logo.svg
+    - logo.png
+    - logo.svg

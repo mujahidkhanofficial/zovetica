@@ -1,4 +1,4 @@
-// Zovetica Widget Library - Barrel Export
+// Pets & Vets Widget Library - Barrel Export
 export 'offline_banner.dart';
 export 'app_refresh_indicator.dart';
 export 'pet_card.dart';

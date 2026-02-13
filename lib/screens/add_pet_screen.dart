@@ -1,9 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:zovetica/services/pet_service.dart';
-import 'package:zovetica/data/repositories/pet_repository.dart';
-import 'package:zovetica/services/storage_service.dart';
+import 'package:pets_and_vets/services/pet_service.dart';
+import 'package:pets_and_vets/data/repositories/pet_repository.dart';
+import 'package:pets_and_vets/services/storage_service.dart';
 import '../models/app_models.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_gradients.dart';

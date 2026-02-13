@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:zovetica/screens/auth_screen.dart';
-import 'package:zovetica/services/auth_service.dart';
-import 'package:zovetica/services/supabase_service.dart';
+import 'package:pets_and_vets/screens/auth_screen.dart';
+import 'package:pets_and_vets/services/auth_service.dart';
+import 'package:pets_and_vets/services/supabase_service.dart';
 import '../data/local/database.dart';
 import '../data/repositories/user_repository.dart';
 import '../theme/app_colors.dart';
@@ -923,12 +923,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       context, 
                       icon: Icons.help_outline, 
                       title: 'Help & Support', 
-                      onTap: () => AppNotifications.showInfo(context, 'Contact us at support@zovetica.com'),
+                      onTap: () => AppNotifications.showInfo(context, 'Contact us at support@pets_and_vets.com'),
                     ),
                     _buildSettingsTile(
                       context, 
                       icon: Icons.info_outline, 
-                      title: 'About Zovetica', 
+                      title: 'About Pets & Vets', 
                       trailing: const Text('v1.0.0', style: TextStyle(color: AppColors.slate, fontSize: 13)),
                       onTap: () {},
                     ),

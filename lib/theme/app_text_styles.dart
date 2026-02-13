@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'app_colors.dart';
 
-/// Zovetica Design System - Typography
+/// Pets & Vets Design System - Typography
 class AppTextStyles {
   AppTextStyles._();
 

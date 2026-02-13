@@ -313,7 +313,7 @@ class NotificationService {
           callback: (payload) async {
             final newNotification = payload.newRecord;
             if (newNotification != null) {
-              final title = newNotification['title'] ?? 'Zovetica';
+              final title = newNotification['title'] ?? 'Pets & Vets';
               final body = newNotification['body'] ?? 'You have a new notification';
               final type = newNotification['type'] ?? '';
               final relatedId = newNotification['related_id'];

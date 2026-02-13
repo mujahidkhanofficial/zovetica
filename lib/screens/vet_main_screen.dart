@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:zovetica/screens/doctor_dashboard_screen.dart';
-import 'package:zovetica/screens/simple_chat_list_screen.dart';
-import 'package:zovetica/screens/community_screen.dart';
-import 'package:zovetica/screens/notification_screen.dart';
-import 'package:zovetica/screens/profile_screen.dart';
+import 'package:pets_and_vets/screens/doctor_dashboard_screen.dart';
+import 'package:pets_and_vets/screens/simple_chat_list_screen.dart';
+import 'package:pets_and_vets/screens/community_screen.dart';
+import 'package:pets_and_vets/screens/notification_screen.dart';
+import 'package:pets_and_vets/screens/profile_screen.dart';
 import '../theme/app_colors.dart';
 import '../services/notification_service.dart';
 import '../services/global_chat_manager.dart';

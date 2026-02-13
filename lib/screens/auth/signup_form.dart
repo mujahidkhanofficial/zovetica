@@ -1,8 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:zovetica/services/auth_service.dart';
-import 'package:zovetica/services/user_service.dart';
+import 'package:pets_and_vets/services/auth_service.dart';
+import 'package:pets_and_vets/services/user_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_gradients.dart';
 import '../../theme/app_spacing.dart';

@@ -1,4 +1,4 @@
-import 'package:zovetica/services/supabase_service.dart';
+import 'package:pets_and_vets/services/supabase_service.dart';
 
 class UserProfileService {
   final _client = SupabaseService.client;

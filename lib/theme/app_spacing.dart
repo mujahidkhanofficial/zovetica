@@ -1,4 +1,4 @@
-/// Zovetica Design System - Industrial Level Spacing & Radius
+/// Pets & Vets Design System - Industrial Level Spacing & Radius
 class AppSpacing {
   AppSpacing._();
 

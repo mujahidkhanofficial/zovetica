@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:zovetica/screens/auth_screen.dart';
-import 'package:zovetica/screens/main_screen.dart';
-import 'package:zovetica/services/auth_service.dart';
-import 'package:zovetica/services/supabase_service.dart';
-import 'package:zovetica/core/network/connectivity_service.dart';
-import 'package:zovetica/core/sync/sync_engine.dart';
+import 'package:pets_and_vets/screens/auth_screen.dart';
+import 'package:pets_and_vets/screens/main_screen.dart';
+import 'package:pets_and_vets/services/auth_service.dart';
+import 'package:pets_and_vets/services/supabase_service.dart';
+import 'package:pets_and_vets/core/network/connectivity_service.dart';
+import 'package:pets_and_vets/core/sync/sync_engine.dart';
 import 'screens/splash_screen.dart';
 import 'theme/app_theme.dart';
 
@@ -29,14 +29,14 @@ void main() async {
   await ConnectivityService.instance.initialize();
   await SyncEngine.instance.initialize();
 
-  runApp(const ZoveticaApp());
+  runApp(const PetsAndVetsApp());
 }
 
 
-class ZoveticaApp extends StatelessWidget {
+class PetsAndVetsApp extends StatelessWidget {
   final AuthService? authService;
 
-  const ZoveticaApp({super.key, this.authService});
+  const PetsAndVetsApp({super.key, this.authService});
 
   @override
   Widget build(BuildContext context) {
@@ -47,7 +47,7 @@ class ZoveticaApp extends StatelessWidget {
 
     return MaterialApp(
       navigatorKey: navigatorKey,
-      title: 'Zovetica',
+      title: 'Pets & Vets',
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.system,

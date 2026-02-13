@@ -38,7 +38,7 @@ class AuthService {
     final response = await _client.auth.signUp(
       email: email,
       password: password,
-      emailRedirectTo: 'io.supabase.zovetica://login-callback',
+      emailRedirectTo: 'io.supabase.pets_and_vets://login-callback',
       data: {
         'full_name': name,
         'username': username,

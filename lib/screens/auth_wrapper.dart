@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:zovetica/services/supabase_service.dart';
-import 'package:zovetica/services/user_service.dart';
-import 'package:zovetica/data/repositories/user_repository.dart';
+import 'package:pets_and_vets/services/supabase_service.dart';
+import 'package:pets_and_vets/services/user_service.dart';
+import 'package:pets_and_vets/data/repositories/user_repository.dart';
 import 'vet_main_screen.dart';
 import 'admin/admin_dashboard_screen.dart';
 import 'home_screen.dart';

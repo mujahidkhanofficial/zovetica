@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Zovetica Design System - Industrial Level Color Tokens
+/// Pets & Vets Design System - Industrial Level Color Tokens
 /// Ocean Blue (Trust) + Mint Green (Health) + Sunset Coral (Action)
 class AppColors {
   AppColors._();

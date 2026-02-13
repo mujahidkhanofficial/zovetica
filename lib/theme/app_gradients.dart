@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'app_colors.dart';
 
-/// Zovetica Design System - Industrial Level Gradients
+/// Pets & Vets Design System - Industrial Level Gradients
 class AppGradients {
   AppGradients._();
 

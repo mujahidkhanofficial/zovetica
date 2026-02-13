@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:zovetica/services/supabase_service.dart';
-import 'package:zovetica/services/notification_service.dart';
-import 'package:zovetica/services/global_chat_manager.dart';
-import 'package:zovetica/widgets/badge_widget.dart';
-import 'package:zovetica/services/user_service.dart';
-import 'package:zovetica/services/auth_service.dart';
+import 'package:pets_and_vets/services/supabase_service.dart';
+import 'package:pets_and_vets/services/notification_service.dart';
+import 'package:pets_and_vets/services/global_chat_manager.dart';
+import 'package:pets_and_vets/widgets/badge_widget.dart';
+import 'package:pets_and_vets/services/user_service.dart';
+import 'package:pets_and_vets/services/auth_service.dart';
 import '../data/repositories/user_repository.dart';
 import '../widgets/widgets.dart';
-import 'package:zovetica/services/pet_service.dart';
-import 'package:zovetica/services/notification_service.dart';
+import 'package:pets_and_vets/services/pet_service.dart';
+import 'package:pets_and_vets/services/notification_service.dart';
 import '../models/app_models.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
@@ -33,9 +33,9 @@ import '../data/local/database.dart';
 import '../utils/app_notifications.dart';
 import 'admin/admin_dashboard_screen.dart';
 
-import 'package:zovetica/services/supabase_service.dart';
+import 'package:pets_and_vets/services/supabase_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:zovetica/screens/auth_screen.dart';
+import 'package:pets_and_vets/screens/auth_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final bool isAdmin;

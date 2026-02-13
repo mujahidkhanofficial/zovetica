@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:zovetica/services/auth_service.dart';
-import 'package:zovetica/services/user_service.dart';
-import 'package:zovetica/services/appointment_service.dart';
+import 'package:pets_and_vets/services/auth_service.dart';
+import 'package:pets_and_vets/services/user_service.dart';
+import 'package:pets_and_vets/services/appointment_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'; // Required for RealtimeChannel & Postgres types
-import 'package:zovetica/services/supabase_service.dart';
+import 'package:pets_and_vets/services/supabase_service.dart';
 import 'vet_appointment_detail_screen.dart';
 import '../models/app_models.dart';
 import '../theme/app_colors.dart';

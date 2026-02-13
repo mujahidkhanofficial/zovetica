@@ -6,7 +6,7 @@
     <uses-permission android:name="android.permission.VIBRATE"/>
     
     <application
-        android:label="zovetica"
+        android:label="Pets &amp; Vets"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

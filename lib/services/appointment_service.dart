@@ -162,7 +162,7 @@ class AppointmentService {
           doctorId: doctorId,
           doctor: doctorInfo?['name'] ?? 'Doctor',
           doctorImage: doctorInfo?['profile_image'],
-          clinic: doctorInfo?['clinic'] ?? 'Zovetica Clinic',
+          clinic: doctorInfo?['clinic'] ?? 'Pets & Vets Clinic',
           date: data['date'] ?? '',
           time: data['time'] ?? '',
           pet: petData['name'] ?? 'Pet',
@@ -610,7 +610,7 @@ class AppointmentService {
         doctorImage: userData['profile_image'], // Doctor's profile image
         // For doctor view, this field effectively becomes "Patient Name"
         doctor: userData['name'] ?? (isDoctorView ? 'Unknown Patient' : 'Doctor'),
-        clinic: userData['clinic'] ?? (isDoctorView ? 'Virtual Clinic' : 'Zovetica Clinic'), 
+        clinic: userData['clinic'] ?? (isDoctorView ? 'Virtual Clinic' : 'Pets & Vets Clinic'), 
         date: data['date'] ?? '',
         time: data['time'] ?? '',
         pet: petData['name'] ?? 'Pet',
@@ -637,7 +637,7 @@ class AppointmentService {
         doctorId: data['doctor_id']?.toString(), // Doctor's ID for fetching available slots
         doctorImage: userData['profile_image'], // Doctor's profile image
         doctor: userData['name'] ?? doctorData['specialty'] ?? 'Doctor',
-        clinic: userData['clinic'] ?? doctorData['clinic'] ?? 'Zovetica Clinic', 
+        clinic: userData['clinic'] ?? doctorData['clinic'] ?? 'Pets & Vets Clinic', 
         date: data['date'] ?? '',
         time: data['time'] ?? '',
         pet: petData['name'] ?? 'Pet',

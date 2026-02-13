@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:zovetica/screens/vet_main_screen.dart';
-import 'package:zovetica/services/auth_service.dart';
-import 'package:zovetica/services/user_service.dart';
+import 'package:pets_and_vets/screens/vet_main_screen.dart';
+import 'package:pets_and_vets/services/auth_service.dart';
+import 'package:pets_and_vets/services/user_service.dart';
 import 'home_screen.dart';
 import 'auth_screen.dart';
 

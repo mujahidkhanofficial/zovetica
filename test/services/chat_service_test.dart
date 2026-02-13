@@ -1,9 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:zovetica/services/notification_service.dart';
-import 'package:zovetica/services/user_service.dart';
-import 'package:zovetica/services/chat_service.dart';
+import 'package:pets_and_vets/services/notification_service.dart';
+import 'package:pets_and_vets/services/user_service.dart';
+import 'package:pets_and_vets/services/chat_service.dart';
 
 // Generate mocks
 @GenerateMocks([SupabaseClient, NotificationService, UserService])

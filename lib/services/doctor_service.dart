@@ -33,7 +33,7 @@ class DoctorService {
       rating: (data['rating'] is num) ? (data['rating'] as num).toDouble() : 0.0,
       reviews: data['reviews_count'] ?? 0,
       nextAvailable: 'Available', // Can be refined later
-      clinic: data['clinic'] ?? 'Zovetica Clinic',
+      clinic: data['clinic'] ?? 'Pets & Vets Clinic',
       image: data['profile_image'] ?? '',
       available: true, // Default to true if not specified
     );

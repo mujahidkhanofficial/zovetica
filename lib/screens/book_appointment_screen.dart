@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:zovetica/models/app_models.dart';
-import 'package:zovetica/services/appointment_service.dart';
-import 'package:zovetica/services/pet_service.dart';
+import 'package:pets_and_vets/models/app_models.dart';
+import 'package:pets_and_vets/services/appointment_service.dart';
+import 'package:pets_and_vets/services/pet_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_gradients.dart';
 import '../theme/app_spacing.dart';

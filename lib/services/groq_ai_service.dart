@@ -61,7 +61,7 @@ class GroqAiService {
 
   /// Build system prompt for veterinary AI assistant
   String _buildSystemPrompt(String? petContext) {
-    String basePrompt = '''You are VetAI, a helpful and empathetic veterinary AI assistant for Zovetica, a pet healthcare app.
+    String basePrompt = '''You are VetAI, a helpful and empathetic veterinary AI assistant for Pets & Vets, a pet healthcare app.
 
 Your role:
 - Provide general pet health information and guidance
