@@ -47,7 +47,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.cloud,
+      backgroundColor: Colors.white,
       body: Stack(
         children: [
           PageView.builder(
@@ -65,50 +65,53 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Placeholder for actual asset if missing, or use Container
-                    // Using Container with icon fallback if image fails or for cleaner look during dev
+                    const Spacer(),
+                    // Image/Logo area
                     Container(
-                      height: 300,
+                      height: 280,
                       alignment: Alignment.center,
-                       // In a real app, we'd ensure assets exist. For now, assuming they might not, 
-                       // but code says Image.asset. I'll keep it but wrap in error builder or just style text.
-                       child: Image.asset(
-                          page['image']!,
-                          height: 300,
-                          errorBuilder: (context, error, stackTrace) => Image.asset(
-                            'logo.png',
-                            height: 150,
-                          ),
-                       ),
+                      child: Image.asset(
+                        page['image']!,
+                        height: 280,
+                        errorBuilder: (context, error, stackTrace) => Image.asset(
+                          'logo.png',
+                          height: 180,
+                        ),
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.xxl),
                     Text(
                       page['title']!,
-                      style: TextStyle(
-                        fontSize: 28,
+                      style: const TextStyle(
+                        fontSize: 32,
                         fontWeight: FontWeight.w800,
                         color: AppColors.charcoal,
-                        letterSpacing: -0.5,
+                        letterSpacing: -1.0,
                       ),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: AppSpacing.md),
-                    Text(
-                      page['subtitle']!,
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: AppColors.slate,
-                        height: 1.5,
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                      child: Text(
+                        page['subtitle']!,
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: AppColors.slate.withAlpha(180),
+                          height: 1.6,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        textAlign: TextAlign.center,
                       ),
-                      textAlign: TextAlign.center,
                     ),
+                    const Spacer(),
                   ],
                 ),
               );
             },
           ),
           Positioned(
-            bottom: 40,
+            bottom: 50,
             left: AppSpacing.xl,
             right: AppSpacing.xl,
             child: Row(
@@ -120,41 +123,57 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     (index) => AnimatedContainer(
                       duration: const Duration(milliseconds: 300),
                       margin: const EdgeInsets.symmetric(horizontal: 4),
-                      width: _currentPage == index ? 24 : 8,
+                      width: _currentPage == index ? 28 : 10,
                       height: 8,
                       decoration: BoxDecoration(
                         color: _currentPage == index
                             ? AppColors.primary
-                            : AppColors.primary.withAlpha(51),
+                            : AppColors.primary.withAlpha(40),
                         borderRadius: BorderRadius.circular(4),
                       ),
                     ),
                   ),
                 ),
-                ElevatedButton(
-                  onPressed: () {
-                    if (_currentPage == _pages.length - 1) {
-                      _completeOnboarding();
-                    } else {
-                      _pageController.nextPage(
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeInOut,
-                      );
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 32, vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
-                    ),
-                    elevation: 4,
-                    shadowColor: AppColors.primary.withAlpha(102),
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: AppGradients.coralButton,
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.accent.withAlpha(80),
+                        blurRadius: 15,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
                   ),
-                  child: Text(
-                    _currentPage == _pages.length - 1 ? 'Get Started' : 'Next',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                  child: ElevatedButton(
+                    onPressed: () {
+                      if (_currentPage == _pages.length - 1) {
+                        _completeOnboarding();
+                      } else {
+                        _pageController.nextPage(
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeInOut,
+                        );
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 36, vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+                      ),
+                    ),
+                    child: Text(
+                      _currentPage == _pages.length - 1 ? 'Get Started' : 'Next',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
+                    ),
                   ),
                 ),
               ],

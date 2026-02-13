@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../theme/app_gradients.dart';
+import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import 'auth_screen.dart';
 import 'main_screen.dart';
@@ -110,139 +111,143 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: AppGradients.primaryDiagonal,
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              const Spacer(flex: 3),
-              
-              // Animated Logo
-              AnimatedBuilder(
-                animation: _logoController,
-                builder: (context, child) {
-                  return Transform.scale(
-                    scale: _scaleAnimation.value,
-                    child: Container(
-                      width: 140,
-                      height: 140,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withAlpha(38),
-                            blurRadius: 40,
-                            offset: const Offset(0, 15),
-                          ),
-                        ],
-                      ),
-                      child: Center(
-                        child: Transform.translate(
-                          offset: Offset(0, -10 * (1 - _bounceAnimation.value)),
-                          child: Padding(
-                            padding: const EdgeInsets.all(20),
-                            child: Image.asset(
-                              'logo.png',
-                              fit: BoxFit.contain,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-              
-              const SizedBox(height: AppSpacing.xxl),
-              
-              // App Name with fade animation
-              AnimatedBuilder(
-                animation: _fadeController,
-                builder: (context, child) {
-                  return Opacity(
-                    opacity: _fadeAnimation.value,
-                    child: Transform.translate(
-                      offset: Offset(0, _slideAnimation.value),
-                      child: Column(
-                        children: [
-                          Text(
-                            'Pets & Vets',
-                            style: TextStyle(
-                              fontSize: 42,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                              letterSpacing: -1,
-                            ),
-                          ),
-                          const SizedBox(height: AppSpacing.sm),
-                          Text(
-                            'Your Pet\'s Health Companion',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.white.withAlpha(230),
-                              fontWeight: FontWeight.w400,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-              
-              const Spacer(flex: 3),
-              
-              // Loading indicator
-              AnimatedBuilder(
-                animation: _fadeController,
-                builder: (context, child) {
-                  return Opacity(
-                    opacity: _fadeAnimation.value,
-                    child: Column(
-                      children: [
-                        SizedBox(
-                          width: 40,
-                          height: 40,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 3,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.white.withAlpha(204),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.xl),
-                        Text(
-                          'Loading...',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.white.withAlpha(179),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-              
-              const SizedBox(height: AppSpacing.xxxl),
-              
-              // Version
-              Text(
-                'Version 1.0.0',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.white.withAlpha(128),
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            // Subtle Background Element (Optional, can add a very faint splash of secondary color)
+            Positioned(
+              top: -100,
+              right: -100,
+              child: Container(
+                width: 300,
+                height: 300,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.primary.withAlpha(5),
                 ),
               ),
-              const SizedBox(height: AppSpacing.xl),
-            ],
-          ),
+            ),
+            
+            Column(
+              children: [
+                const Spacer(flex: 3),
+                
+                // Animated Logo - Minimalist, no container
+                AnimatedBuilder(
+                  animation: _logoController,
+                  builder: (context, child) {
+                    return Opacity(
+                      opacity: _logoController.value,
+                      child: Transform.scale(
+                        scale: _scaleAnimation.value,
+                        child: Center(
+                          child: Transform.translate(
+                            offset: Offset(0, -10 * (1 - _bounceAnimation.value)),
+                            child: SizedBox(
+                              width: 180,
+                              height: 180,
+                              child: Image.asset(
+                                'logo.png',
+                                fit: BoxFit.contain,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                
+                const SizedBox(height: AppSpacing.xl),
+                
+                // App Name with fade animation
+                AnimatedBuilder(
+                  animation: _fadeController,
+                  builder: (context, child) {
+                    return Opacity(
+                      opacity: _fadeAnimation.value,
+                      child: Transform.translate(
+                        offset: Offset(0, _slideAnimation.value),
+                        child: Column(
+                          children: [
+                            const Text(
+                              'Pets & Vets',
+                              style: TextStyle(
+                                fontSize: 40,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.charcoal,
+                                letterSpacing: -1.2,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.xs),
+                            Text(
+                              'Smart Healthcare for Your Beloved Pets',
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: AppColors.slate.withAlpha(200),
+                                fontWeight: FontWeight.w500,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                
+                const Spacer(flex: 3),
+                
+                // Loading indicator - Refined for white background
+                AnimatedBuilder(
+                  animation: _fadeController,
+                  builder: (context, child) {
+                    return Opacity(
+                      opacity: _fadeAnimation.value,
+                      child: Column(
+                        children: [
+                          SizedBox(
+                            width: 32,
+                            height: 32,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                AppColors.primary.withAlpha(200),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          Text(
+                            'Initializing Secure Connection...',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.slate.withAlpha(150),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+                
+                const SizedBox(height: AppSpacing.xxxl),
+                
+                // Version
+                Text(
+                  'v1.0.0 • Production Build',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.slate.withAlpha(100),
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+              ],
+            ),
+          ],
         ),
       ),
     );

@@ -35,38 +35,22 @@ class _AuthScreenState extends State<AuthScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.cloud,
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
             child: Column(
               children: [
-                const SizedBox(height: 50),
+                const SizedBox(height: 60),
                 
-                // Logo
-                Container(
-                  width: 110,
-                  height: 110,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primary.withAlpha(50),
-                        blurRadius: 30,
-                        offset: const Offset(0, 10),
-                      ),
-                    ],
-                  ),
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(15),
-                      child: Image.asset(
-                        'logo.png',
-                        fit: BoxFit.contain,
-                      ),
-                    ),
+                // Logo - Minimalist, no container
+                SizedBox(
+                  width: 140,
+                  height: 140,
+                  child: Image.asset(
+                    'logo.png',
+                    fit: BoxFit.contain,
                   ),
                 ),
                 
@@ -75,49 +59,52 @@ class _AuthScreenState extends State<AuthScreen>
                 // Welcome Text
                 const Text(
                   'Welcome to Pets & Vets',
+                  textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 30,
+                    fontWeight: FontWeight.w800,
                     color: AppColors.charcoal,
-                    letterSpacing: -0.5,
+                    letterSpacing: -0.8,
                   ),
                 ),
-                const SizedBox(height: AppSpacing.sm),
+                const SizedBox(height: AppSpacing.xs),
                 Text(
                   'Your pet\'s health companion',
                   style: TextStyle(
                     fontSize: 16,
-                    color: AppColors.slate,
+                    color: AppColors.slate.withAlpha(180),
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
                 
                 const SizedBox(height: AppSpacing.xxl),
                 
-                // Tab Bar
+                // Tab Bar - Refined for white background
                 Container(
                   decoration: BoxDecoration(
-                    color: AppColors.white,
+                    color: AppColors.borderLight.withAlpha(100),
                     borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withAlpha(10),
-                        blurRadius: 10,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
                   ),
+                  padding: const EdgeInsets.all(4),
                   child: TabBar(
                     controller: _tabController,
                     indicator: BoxDecoration(
                       gradient: AppGradients.coralButton,
                       borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.accent.withAlpha(60),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
                     labelColor: Colors.white,
                     unselectedLabelColor: AppColors.slate,
                     indicatorSize: TabBarIndicatorSize.tab,
                     dividerColor: Colors.transparent,
                     labelStyle: const TextStyle(
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w700,
                       fontSize: 15,
                     ),
                     tabs: const [
@@ -131,7 +118,7 @@ class _AuthScreenState extends State<AuthScreen>
                 
                 // Tab Content
                 SizedBox(
-                  height: 600, // Increased height to accommodate new fields
+                  height: 650, // Adjusted height
                   child: TabBarView(
                     controller: _tabController,
                     children: [

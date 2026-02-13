@@ -741,33 +741,33 @@ class _SignUpFormState extends State<SignUpForm> {
         }
       },
       style: const TextStyle(
-        fontSize: 16,
-        color: Color(0xFF1A1A1A),
-        fontWeight: FontWeight.w500,
+        fontSize: 15,
+        color: AppColors.charcoal,
+        fontWeight: FontWeight.w600,
       ),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: TextStyle(color: AppColors.slate),
-        floatingLabelStyle: TextStyle(color: AppColors.primary),
-        prefixIcon: icon != null ? Icon(icon, color: AppColors.slate) : null,
+        labelStyle: TextStyle(color: AppColors.slate.withAlpha(150), fontWeight: FontWeight.w500),
+        floatingLabelStyle: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700),
+        prefixIcon: icon != null ? Icon(icon, color: AppColors.slate.withAlpha(150), size: 22) : null,
         suffixIcon: suffixIcon,
         filled: true,
-        fillColor: AppColors.white,
+        fillColor: AppColors.borderLight.withAlpha(50),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.lg,
-          vertical: AppSpacing.lg,
+          vertical: 18,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-          borderSide: BorderSide(color: AppColors.borderLight),
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-          borderSide: BorderSide(color: AppColors.borderLight),
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-          borderSide: BorderSide(color: AppColors.primary, width: 2),
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: AppColors.primary, width: 2),
         ),
       ),
     );

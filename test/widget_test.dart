@@ -33,13 +33,13 @@ void main() {
     final authService = AuthService(client: mockSupabaseClient);
 
     // Build our app and trigger a frame.
-    await tester.pumpWidget(Pets & VetsApp(authService: authService)); // Inject!
+    await tester.pumpWidget(const PetsAndVetsApp()); 
 
     // Verify that the splash screen appears (it shows the app title)
     // Give it a moment to build
     await tester.pump();
 
     // The app should build without errors
-    expect(find.byType(Pets & VetsApp), findsOneWidget);
+    expect(find.byType(PetsAndVetsApp), findsOneWidget);
   });
 }
