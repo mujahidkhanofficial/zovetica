@@ -49,7 +49,13 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
 
   Future<void> _fetchPets() async {
     try {
-      final pets = await _petService.getPets();
+      // Local-first retrieval (avoids empty result when remote not synced yet)
+      final local = await PetRepository.instance.getMyPets(forceRefresh: true);
+      final pets = local.map(PetRepository.instance.localPetToPet).toList();
+
+      // also fire-and-forget a background sync
+      PetRepository.instance.syncPets();
+
       if (mounted) {
         setState(() {
           _myPets = pets;

@@ -25,7 +25,7 @@ class _AdminAppointmentsScreenState extends State<AdminAppointmentsScreen> {
   String? _selectedStatus;
   DateTime? _selectedDate;
 
-  final List<String> _statusOptions = ['pending', 'confirmed', 'completed', 'cancelled'];
+  final List<String> _statusOptions = ['pending', 'awaiting_payment', 'confirmed', 'completed', 'cancelled'];
 
   @override
   void initState() {
@@ -287,6 +287,61 @@ class _AdminAppointmentsScreenState extends State<AdminAppointmentsScreen> {
                 ),
               ],
             ),
+            // Payment confirmation row
+            if (appointment.paymentConfirmedByUser == true && appointment.paymentConfirmedByAdmin != true)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          try {
+                            await _adminService.confirmPayment(appointment.id);
+                            AppNotifications.showSuccess(context, 'Payment approved');
+                            _loadAppointments();
+                          } catch (e) {
+                            AppNotifications.showError(context, 'Failed to confirm payment');
+                          }
+                        },
+                        child: const Text('Confirm Payment'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (appointment.paymentConfirmedByAdmin == true)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                child: Row(
+                  children: const [
+                    Icon(Icons.check_circle, color: Colors.green, size: 18),
+                    SizedBox(width: 8),
+                    Text('Payment verified', style: TextStyle(color: Colors.green)),
+                  ],
+                ),
+              ),
+            if (appointment.paymentScreenshotUrl != null && appointment.paymentScreenshotUrl!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                child: GestureDetector(
+                  onTap: () {
+                    showDialog(
+                      context: context,
+                      builder: (_) => Dialog(
+                        child: Image.network(appointment.paymentScreenshotUrl!),
+                      ),
+                    );
+                  },
+                  child: Row(
+                    children: [
+                      const Icon(Icons.photo, size: 20),
+                      const SizedBox(width: 8),
+                      Text('View payment screenshot', style: TextStyle(color: AppColors.primary)),
+                    ],
+                  ),
+                ),
+              ),
           ),
 
           Padding(
@@ -410,6 +465,8 @@ class _AdminAppointmentsScreenState extends State<AdminAppointmentsScreen> {
         return AppColors.success;
       case 'pending':
         return AppColors.warning;
+      case 'awaiting_payment':
+        return AppColors.primary; // blue shade
       case 'completed':
         return AppColors.primary;
       case 'cancelled':

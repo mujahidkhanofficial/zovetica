@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import '../models/user_model.dart';
 import '../models/post_model.dart';
 import '../models/appointment_model.dart';
+import 'appointment_service.dart';
 
 /// Service class for admin-specific operations.
 /// Handles user management, doctor verification, content moderation,
@@ -215,6 +216,18 @@ class AdminService {
     }
   }
 
+  /// Confirm manual payment for an appointment
+  Future<void> confirmPayment(String appointmentId) async {
+    try {
+      // reuse appointment service for wallet calculations
+      final apptService = AppointmentService();
+      await apptService.confirmPaymentByAdmin(appointmentId);
+    } catch (e) {
+      debugPrint('Error confirming payment: $e');
+      rethrow;
+    }
+  }
+
   /// Approves a doctor's application.
   /// uses secure RPC approve_doctor_application
   Future<bool> approveDoctorApplication(String applicationId) async {
@@ -336,7 +349,13 @@ class AdminService {
       var query = _client.from('appointments').select('*, users(*), doctors(*), pets(*)');
 
       if (statusFilter != null && statusFilter.isNotEmpty) {
-        query = query.eq('status', statusFilter);
+        if (statusFilter == 'awaiting_payment') {
+          // special case: user confirmed payment but admin has not yet
+          query = query.eq('payment_confirmed_by_user', true)
+                       .eq('payment_confirmed_by_admin', false);
+        } else {
+          query = query.eq('status', statusFilter);
+        }
       }
 
       if (dateFrom != null) {

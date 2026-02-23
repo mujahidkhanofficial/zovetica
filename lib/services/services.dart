@@ -9,3 +9,4 @@ export 'appointment_service.dart';
 export 'storage_service.dart';
 export 'friend_service.dart';
 export 'post_service.dart';
+export 'wallet_service.dart';

@@ -62,7 +62,7 @@ class AppointmentType {
       name: 'General Checkup',
       description: 'Routine health examination',
       durationMinutes: 30,
-      priceInPKR: 2000,
+      priceInPKR: 1000,
       icon: Icons.health_and_safety_rounded,
     ),
     AppointmentType(
@@ -70,7 +70,7 @@ class AppointmentType {
       name: 'Vaccination',
       description: 'Vaccine administration',
       durationMinutes: 30,
-      priceInPKR: 3500,
+      priceInPKR: 1000,
       icon: Icons.vaccines_rounded,
     ),
     AppointmentType(
@@ -78,7 +78,7 @@ class AppointmentType {
       name: 'Dental Care',
       description: 'Teeth cleaning & checkup',
       durationMinutes: 30,
-      priceInPKR: 5000,
+      priceInPKR: 1000,
       icon: Icons.sentiment_satisfied_alt_rounded,
     ),
     AppointmentType(
@@ -86,7 +86,7 @@ class AppointmentType {
       name: 'Surgery',
       description: 'Pre-surgery assessment',
       durationMinutes: 30,
-      priceInPKR: 8000,
+      priceInPKR: 1000,
       icon: Icons.local_hospital_rounded,
     ),
     AppointmentType(
@@ -94,7 +94,7 @@ class AppointmentType {
       name: 'Emergency',
       description: 'Urgent care needed',
       durationMinutes: 30,
-      priceInPKR: 10000,
+      priceInPKR: 1000,
       icon: Icons.emergency_rounded,
     ),
     AppointmentType(
@@ -102,7 +102,7 @@ class AppointmentType {
       name: 'Grooming',
       description: 'Professional pet grooming',
       durationMinutes: 30,
-      priceInPKR: 2500,
+      priceInPKR: 1000,
       icon: Icons.content_cut_rounded,
     ),
     AppointmentType(
@@ -110,7 +110,7 @@ class AppointmentType {
       name: 'Follow-up',
       description: 'Post-treatment checkup',
       durationMinutes: 30,
-      priceInPKR: 1500,
+      priceInPKR: 1000,
       icon: Icons.assignment_turned_in_rounded,
     ),
   ];

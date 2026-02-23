@@ -1,13 +1,19 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:pets_and_vets/models/app_models.dart';
 import 'package:pets_and_vets/models/time_slot.dart';
 import 'package:pets_and_vets/services/appointment_service.dart';
 import 'package:pets_and_vets/services/pet_service.dart';
+import 'package:pets_and_vets/data/repositories/pet_repository.dart';
 import 'package:pets_and_vets/services/notification_service.dart';
+import 'package:pets_and_vets/services/storage_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_gradients.dart';
 import '../theme/app_spacing.dart';
 import '../utils/app_notifications.dart';
+import '../utils/pricing.dart';
+import 'payment_screen.dart';
 
 /// Professional Multi-Step Appointment Booking Wizard
 /// Redesigned with enterprise-level UI and multi-pet selection
@@ -68,7 +74,11 @@ class _BookAppointmentWizardState extends State<BookAppointmentWizard>
   Future<void> _loadInitialData() async {
     setState(() => _isLoading = true);
     try {
-      final pets = await _petService.getPets();
+      // use repository to include pending/offline pets and ensure a sync is attempted
+      final localPets = await PetRepository.instance.getMyPets(forceRefresh: true);
+      final pets = localPets.map(PetRepository.instance.localPetToPet).toList();
+
+      // still fetch available dates from service
       final dates = await _appointmentService.getAvailableDates(widget.doctor['id']);
 
       if (mounted) {
@@ -135,17 +145,20 @@ class _BookAppointmentWizardState extends State<BookAppointmentWizard>
     }
 
     setState(() => _isLoading = true);
+    final List<String> createdAppointmentIds = [];
+
     try {
-      // Book for each selected pet
+       // Book for each selected pet
       for (final petId in _selectedPetIds) {
-        await _appointmentService.bookWithSlotCheck(
+        final appointmentId = await _appointmentService.bookWithSlotCheck(
           doctorUserId: widget.doctor['id'],
           petId: petId,
           date: _selectedDate!,
           time: _selectedTime!,
           type: _selectedType.name,
-          priceInPKR: _selectedType.priceInPKR,
+          priceInPKR: fixedAppointmentFeePkr,
         );
+        createdAppointmentIds.add(appointmentId);
       }
 
       // Send notification to doctor
@@ -162,18 +175,31 @@ class _BookAppointmentWizardState extends State<BookAppointmentWizard>
         final doctorUserId = widget.doctor['user_id'] ?? widget.doctor['id'];
         await _notificationService.createNotification(
           userId: doctorUserId,
-          type: 'message', // Using 'message' type as DB constraint doesn't allow 'appointment'
+          type: 'message',
           title: 'New Appointment Request',
           body: 'You have a ${_selectedType.name} appointment for $petCount pet(s) ($petNames) on $dateStr at $_selectedTime',
         );
       } catch (notifError) {
-        // Notification failed but booking succeeded - don't block the flow
         debugPrint('⚠️ Notification failed: $notifError');
       }
 
       if (mounted) {
         setState(() => _isLoading = false);
-        _showSuccessDialog(petCount);
+        
+        // Navigate to payment screen instead of showing success dialog directly
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PaymentScreen(
+              appointmentIds: createdAppointmentIds,
+              totalAmount: fixedAppointmentFeePkr * createdAppointmentIds.length.toDouble(),
+              onPaymentConfirmed: () {
+                 Navigator.pop(context); // Close payment screen
+                 _showSuccessDialog(petCount);
+              },
+            ),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -261,7 +287,7 @@ class _BookAppointmentWizardState extends State<BookAppointmentWizard>
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                'The doctor will confirm your appointment shortly.',
+                                'Your payment has been received and the doctor will confirm your appointment shortly.',
                                 style: TextStyle(fontSize: 13, color: AppColors.charcoal),
                               ),
                             ),
@@ -269,6 +295,7 @@ class _BookAppointmentWizardState extends State<BookAppointmentWizard>
                         ),
                       ),
                       const SizedBox(height: 24),
+                      
                       // Done Button
                       SizedBox(
                         width: double.infinity,

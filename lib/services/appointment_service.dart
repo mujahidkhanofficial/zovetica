@@ -4,6 +4,7 @@ import 'supabase_service.dart';
 import 'notification_service.dart';
 import 'user_service.dart';
 import '../models/app_models.dart';
+import '../utils/pricing.dart';
 
 /// Appointment service for booking and management
 class AppointmentService {
@@ -14,12 +15,20 @@ class AppointmentService {
   static const String _slotsTable = 'availability_slots';
 
   /// Book a new appointment
+  ///
+  /// For manual Easypaisa payments, the client will first send money to
+  /// the platform account (name: Taimoor, number: 03448962643). After the
+  /// transfer the user calls [confirmPaymentByUser] which sets
+  /// `payment_confirmed_by_user=true` and keeps the appointment in
+  /// `pending` status until the admin approves it.
   Future<void> bookAppointment({
     required String doctorId,
     required String petId,
     required DateTime date,
     required String time,
     required String type,
+    String? paymentRefId,
+    int? price,
   }) async {
     final userId = SupabaseService.currentUser?.id;
     if (userId == null) throw Exception('User not authenticated');
@@ -31,6 +40,8 @@ class AppointmentService {
       finalDoctorId = resolvedId;
     }
 
+    final appliedPrice = fixedAppointmentFeePkr;
+
     // Insert and return the appointment ID
     final response = await _client.from(_tableName).insert({
       'user_id': userId,
@@ -40,6 +51,9 @@ class AppointmentService {
       'time': time,
       'type': type,
       'status': 'pending',
+      'price': appliedPrice,
+      if (paymentRefId != null) 'payment_ref_id': paymentRefId,
+      if (paymentRefId != null) 'payment_status': 'paid_to_platform',
     }).select('id').single();
     
     final appointmentId = response['id']?.toString();
@@ -168,9 +182,14 @@ class AppointmentService {
           pet: petData['name'] ?? 'Pet',
           type: data['type'] ?? '',
           status: data['status'] ?? 'pending',
+           price: fixedAppointmentFeePkr,
           petId: petData['id']?.toString(),
           petImage: petData['image_url'],
           ownerId: userId,
+          paymentMethod: data['payment_method']?.toString(),
+          paymentConfirmedByUser: data['payment_confirmed_by_user'] as bool?,
+          paymentConfirmedByAdmin: data['payment_confirmed_by_admin'] as bool?,
+          paymentStatus: data['payment_status']?.toString(),
         ));
       }
 
@@ -285,6 +304,10 @@ class AppointmentService {
           petImage: petData['image_url'],
           ownerId: patientData['id']?.toString(),
           ownerImage: patientData['profile_image'],
+          paymentMethod: data['payment_method']?.toString(),
+          paymentStatus: data['payment_status']?.toString(),
+          paymentConfirmedByUser: data['payment_confirmed_by_user'] as bool?,
+          paymentConfirmedByAdmin: data['payment_confirmed_by_admin'] as bool?,
         ));
       }
 
@@ -317,6 +340,10 @@ class AppointmentService {
         petImage: petData['image_url'],
         ownerId: patientData['id']?.toString(),
         ownerImage: patientData['profile_image'],
+        paymentMethod: data['payment_method']?.toString(),
+        paymentStatus: data['payment_status']?.toString(),
+        paymentConfirmedByUser: data['payment_confirmed_by_user'] as bool?,
+        paymentConfirmedByAdmin: data['payment_confirmed_by_admin'] as bool?,
       );
     }).toList();
   }
@@ -338,19 +365,225 @@ class AppointmentService {
       throw Exception('Appointment not found');
     }
 
-    // 2. Update the status
+    final updateData = <String, dynamic>{'status': status};
+
+    // 2. Handle Payment & Wallet Logic for Easypaisa
+    if (status == 'accepted' && appointmentData['payment_status'] == 'paid_to_platform') {
+        final price = fixedAppointmentFeePkr.toDouble();
+      if (price > 0) {
+        // Calculate 15% platform fee, 85% vet earnings
+        final platformFee = price * platformCommissionRate;
+        final vetEarnings = price - platformFee;
+
+        updateData['platform_fee'] = platformFee;
+        updateData['vet_earnings'] = vetEarnings;
+
+        // Update Doctor's Wallet Balance
+        final doctorId = appointmentData['doctor_id'];
+        final ownerId = appointmentData['user_id'];
+        if (doctorId != null) {
+          final doctorData = await _client.from('users').select('wallet_balance').eq('id', doctorId).maybeSingle();
+          final currentBalance = (doctorData?['wallet_balance'] as num?)?.toDouble() ?? 0.0;
+          
+          await _client.from('users').update({
+            'wallet_balance': currentBalance + vetEarnings
+          }).eq('id', doctorId);
+
+          // Log vet earning transaction
+          await _client.from('wallet_transactions').insert({
+            'doctor_id': doctorId,
+            'appointment_id': appointmentId,
+            'type': 'credit',
+            'amount': vetEarnings,
+            'description': 'Vet earnings for appointment $appointmentId (85% after 15% commission)',
+          });
+        }
+
+        // Log owner payment transaction
+        if (ownerId != null) {
+          await _client.from('wallet_transactions').insert({
+            'user_id': ownerId,
+            'appointment_id': appointmentId,
+            'type': 'debit',
+            'amount': price,
+            'description': 'Paid PKR $price via Easypaisa (15% commission)',
+          });
+        }
+      }
+    } else if (status == 'rejected' && appointmentData['payment_status'] == 'paid_to_platform') {
+      // Mark for refund
+      updateData['payment_status'] = 'refunded';
+      // TODO: Trigger actual Easypaisa Refund API via Edge Function here
+    }
+
+    // 3. Update the status and payment info
     await _client
         .from(_tableName)
-        .update({'status': status})
+        .update(updateData)
         .eq('id', appointmentId);
 
-    // 3. Send notification to appropriate user
+    // 4. Send notification to appropriate user
     await _sendAppointmentNotification(
       appointmentData: appointmentData,
       status: status,
       rejectionReason: rejectionReason,
     );
   }
+
+  /// Called by pet owner after sending money via Easypaisa to Taimoor
+  /// number 03448962643. Leaves appointment in pending state for admin.
+  Future<void> confirmPaymentByUser(String appointmentId, {String? screenshotUrl}) async {
+    bool isPaymentStatusConstraintError(PostgrestException error) {
+      final msg = error.message.toLowerCase();
+      return msg.contains('payment_status_check') ||
+          (msg.contains('violates check constraint') && msg.contains('payment_status'));
+    }
+
+    // mark confirmation flag and attach screenshot if provided
+    final baseUpdateData = {
+      'payment_confirmed_by_user': true,
+      'payment_status': 'pending_admin',
+    };
+
+    final updateWithScreenshot = {
+      ...baseUpdateData,
+      if (screenshotUrl != null) 'payment_screenshot_url': screenshotUrl,
+    };
+
+    try {
+      await _client.from(_tableName).update(updateWithScreenshot).eq('id', appointmentId);
+    } on PostgrestException catch (e) {
+      final missingScreenshotColumn =
+          screenshotUrl != null &&
+          (e.message.contains('payment_screenshot_url') ||
+              e.message.contains('schema cache'));
+
+      final rlsViolation = e.message.toLowerCase().contains('row-level security');
+
+      if (missingScreenshotColumn) {
+        debugPrint(
+          'appointments.payment_screenshot_url not found in schema cache; retrying payment confirmation without screenshot URL',
+        );
+        try {
+          await _client.from(_tableName).update(baseUpdateData).eq('id', appointmentId);
+        } on PostgrestException catch (statusError) {
+          if (!isPaymentStatusConstraintError(statusError)) rethrow;
+
+          // Backward compatibility for older DB constraint values.
+          await _client.from(_tableName).update({
+            'payment_confirmed_by_user': true,
+            'payment_status': 'paid_to_platform',
+          }).eq('id', appointmentId);
+        }
+      } else if (isPaymentStatusConstraintError(e)) {
+        // Backward compatibility for older DB constraint values.
+        await _client.from(_tableName).update({
+          'payment_confirmed_by_user': true,
+          'payment_status': 'paid_to_platform',
+          if (screenshotUrl != null) 'payment_screenshot_url': screenshotUrl,
+        }).eq('id', appointmentId);
+      } else if (rlsViolation) {
+        // Some setups allow updating only a subset of columns.
+        // Retry with a minimal update to maximize compatibility.
+        await _client.from(_tableName).update({
+          'payment_confirmed_by_user': true,
+        }).eq('id', appointmentId);
+      } else {
+        rethrow;
+      }
+    }
+
+    // log a provisional transaction for the owner
+    try {
+      Map<String, dynamic>? appt;
+      dynamic ownerId;
+
+      try {
+        appt = await _client
+            .from(_tableName)
+            .select('price, user_id')
+            .eq('id', appointmentId)
+            .maybeSingle();
+        ownerId = appt?['user_id'];
+      } on PostgrestException catch (e) {
+        final missingUserIdColumn =
+            e.message.contains("'user_id' column") &&
+            e.message.contains('schema cache');
+        if (!missingUserIdColumn) rethrow;
+
+        // Backward compatibility for schemas that use owner_id instead of user_id.
+        appt = await _client
+            .from(_tableName)
+            .select('price, owner_id')
+            .eq('id', appointmentId)
+            .maybeSingle();
+        ownerId = appt?['owner_id'];
+      }
+
+      final price = fixedAppointmentFeePkr.toDouble();
+      if (price > 0) {
+        final txData = {
+          if (ownerId != null) 'user_id': ownerId,
+          'appointment_id': appointmentId,
+          'type': 'debit',
+          'amount': price,
+          'description': 'Payment marked sent (awaiting admin verification)',
+        };
+
+        try {
+          await _client.from('wallet_transactions').insert(txData);
+        } on PostgrestException catch (insertError) {
+          final missingWalletUserId =
+              insertError.message.contains("'user_id' column") &&
+              insertError.message.contains('wallet_transactions') &&
+              insertError.message.contains('schema cache');
+
+          if (missingWalletUserId) {
+            final txDataWithoutUser = {
+              'appointment_id': appointmentId,
+              'type': 'debit',
+              'amount': price,
+              'description': 'Payment marked sent (awaiting admin verification)',
+            };
+            await _client.from('wallet_transactions').insert(txDataWithoutUser);
+          } else {
+            rethrow;
+          }
+        }
+      }
+    } on PostgrestException catch (e) {
+      final msg = e.message.toLowerCase();
+      final expectedSchemaMismatch =
+          msg.contains('schema cache') &&
+          (msg.contains("'user_id' column") || msg.contains("'owner_id' column"));
+      if (!msg.contains('row-level security') && !expectedSchemaMismatch) {
+        debugPrint('Error logging user payment confirmation: $e');
+      }
+    } catch (e) {
+      debugPrint('Error logging user payment confirmation: $e');
+    }
+  }
+
+  /// Admin uses this to mark a manual Easypaisa payment as received.
+  Future<void> confirmPaymentByAdmin(String appointmentId) async {
+    // Fetch price to compute wallet split when admin approves
+    final appointmentData = await _client.from(_tableName).select().eq('id', appointmentId).maybeSingle();
+    if (appointmentData == null) throw Exception('Appointment not found');
+    final price = (appointmentData['price'] as num?)?.toDouble() ?? 0.0;
+
+    // Mark admin confirmation and payment status first so updateAppointmentStatus can apply wallet logic
+    await _client.from(_tableName).update({
+      'payment_confirmed_by_admin': true,
+      'payment_status': 'paid_to_platform',
+    }).eq('id', appointmentId);
+
+    // Update appointment and run the same logic as acceptance (wallet updates/transactions happen here)
+    await updateAppointmentStatus(
+      appointmentId: appointmentId,
+      status: 'accepted',
+    );
+  }
+
 
   /// Send appointment notification based on status change
   Future<void> _sendAppointmentNotification({
@@ -762,7 +995,7 @@ class AppointmentService {
   }
 
   /// Book appointment with real-time slot verification
-  Future<void> bookWithSlotCheck({
+  Future<String> bookWithSlotCheck({
     required String doctorUserId,
     required String petId,
     required DateTime date,
@@ -792,7 +1025,9 @@ class AppointmentService {
       throw Exception('You already have a pending request with this doctor. Please wait for them to respond.');
     }
 
-    await _client.from(_tableName).insert({
+    final appliedPrice = fixedAppointmentFeePkr;
+
+    final response = await _client.from(_tableName).insert({
       'user_id': userId,
       'doctor_id': actualDoctorId,
       'pet_id': petId,
@@ -800,8 +1035,14 @@ class AppointmentService {
       'time': time,
       'type': type,
       'status': 'pending',
-      'price': priceInPKR,
-    });
+      'price': appliedPrice,
+    }).select('id').single();
+
+    final appointmentId = response['id']?.toString();
+    if (appointmentId == null || appointmentId.isEmpty) {
+      throw Exception('Failed to create appointment');
+    }
+    return appointmentId;
   }
 
   /// Check if user already has a pending request with this doctor

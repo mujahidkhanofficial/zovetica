@@ -14,6 +14,7 @@ import '../theme/app_shadows.dart';
 import '../widgets/enterprise_header.dart'; 
 import '../widgets/widgets.dart'; 
 import '../utils/app_notifications.dart';
+import '../utils/pricing.dart';
 import '../services/notification_service.dart';
 import '../data/repositories/appointment_repository.dart';
 import '../data/repositories/user_repository.dart';
@@ -817,6 +818,22 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                           Text(
                             "${appointment.date} • ${appointment.time}", 
                             style: const TextStyle(color: AppColors.slate, fontSize: 13, fontWeight: FontWeight.w500)
+                          ),
+                          const SizedBox(height: 4),
+                          Builder(
+                            builder: (_) {
+                              final fee = appointment.price > 0 ? appointment.price : fixedAppointmentFeePkr;
+                              final commission = calculatePlatformCommission(fee);
+                              final vetGets = calculateVetEarnings(fee);
+                              return Text(
+                                'Fee PKR $fee • Commission 15% (PKR $commission) • You get PKR $vetGets',
+                                style: const TextStyle(
+                                  color: AppColors.secondary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              );
+                            },
                           ),
                         ],
                       ),

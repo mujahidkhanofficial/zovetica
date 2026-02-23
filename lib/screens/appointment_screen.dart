@@ -14,6 +14,7 @@ import '../services/review_service.dart'; // Review Service
 import '../widgets/widgets.dart';
 import '../widgets/cached_avatar.dart'; // Review Modal
 import '../utils/app_notifications.dart';
+import '../utils/pricing.dart';
 import 'find_doctor_screen.dart';
 import '../data/repositories/appointment_repository.dart';
 import '../data/local/database.dart';
@@ -620,7 +621,13 @@ class _AppointmentScreenState extends State<AppointmentScreen> {
     Color statusBgColor;
     IconData statusIcon;
     
-    switch (appointment.status.toLowerCase()) {
+    // determine status key, allowing a pseudo-key for pending payment
+    String statusKey = appointment.status.toLowerCase();
+    if (appointment.paymentConfirmedByUser == true && appointment.paymentConfirmedByAdmin != true) {
+      statusKey = 'awaiting_payment';
+    }
+
+    switch (statusKey) {
       case 'pending':
         statusColor = AppColors.warning;
         statusBgColor = AppColors.warning.withAlpha(30);
@@ -631,6 +638,11 @@ class _AppointmentScreenState extends State<AppointmentScreen> {
         statusColor = AppColors.secondary;
         statusBgColor = AppColors.secondary.withAlpha(30);
         statusIcon = Icons.check_circle_rounded;
+        break;
+      case 'awaiting_payment':
+        statusColor = AppColors.primary;
+        statusBgColor = AppColors.primary.withAlpha(30);
+        statusIcon = Icons.payment;
         break;
       case 'cancelled':
         statusColor = AppColors.error;
@@ -656,6 +668,14 @@ class _AppointmentScreenState extends State<AppointmentScreen> {
     final isPending = appointment.status.toLowerCase() == 'pending';
     final isReschedulePending = appointment.status.toLowerCase() == 'rescheduled_pending';
     final isActive = ['pending', 'accepted', 'confirmed'].contains(appointment.status.toLowerCase());
+    
+    // compute display text for header
+    String displayStatus;
+    if (appointment.paymentConfirmedByUser == true && appointment.paymentConfirmedByAdmin != true) {
+      displayStatus = 'AWAITING PAYMENT';
+    } else {
+      displayStatus = appointment.status.toUpperCase();
+    }
     
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -711,7 +731,7 @@ class _AppointmentScreenState extends State<AppointmentScreen> {
                           Icon(statusIcon, size: 14, color: statusColor),
                           const SizedBox(width: 4),
                           Text(
-                            appointment.status.toUpperCase(),
+                            displayStatus,
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
@@ -780,6 +800,38 @@ class _AppointmentScreenState extends State<AppointmentScreen> {
                       _buildInfoItem(Icons.pets, appointment.pet),
                     ],
                   ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Fee Breakdown
+                Builder(
+                  builder: (_) {
+                    final totalFee = appointment.price > 0 ? appointment.price : fixedAppointmentFeePkr;
+                    final platformCommission = calculatePlatformCommission(totalFee);
+                    final vetReceives = calculateVetEarnings(totalFee);
+                    return Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withAlpha(10),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.primary.withAlpha(45)),
+                      ),
+                      child: Column(
+                        children: [
+                          _buildFeeRow('Appointment Fee', 'PKR $totalFee', isStrong: true),
+                          const SizedBox(height: 6),
+                          _buildFeeRow('Platform Commission (15%)', 'PKR $platformCommission'),
+                          const SizedBox(height: 6),
+                          _buildFeeRow(
+                            widget.isDoctor ? 'You Receive (85%)' : 'Vet Receives (85%)',
+                            'PKR $vetReceives',
+                            isAccent: true,
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
 
                 const SizedBox(height: 16),
@@ -944,6 +996,31 @@ class _AppointmentScreenState extends State<AppointmentScreen> {
             fontSize: 13,
             fontWeight: FontWeight.w500,
             color: AppColors.charcoal,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFeeRow(String label, String value, {bool isStrong = false, bool isAccent = false}) {
+    final color = isAccent ? AppColors.secondary : AppColors.charcoal;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: AppColors.slate,
+            fontWeight: isStrong ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 12,
+            color: color,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ],

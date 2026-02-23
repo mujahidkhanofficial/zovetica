@@ -22,6 +22,7 @@ import 'pet_details_screen.dart';
 import 'add_pet_screen.dart';
 import 'settings_screen.dart';
 import 'chat_screen.dart';
+import 'transaction_history_screen.dart';
 import '../widgets/post_card.dart';
 import '../widgets/comments_sheet.dart';
 import '../widgets/confirmation_dialog.dart';

@@ -79,7 +79,7 @@ class PetRepository {
     DateTime? nextCheckup,
   }) async {
     final userId = _authService.currentUser?.id;
-    if (userId == null) return null;
+    if (userId == null) throw Exception('User not authenticated. Please log in again.');
 
     // Generate a temporary local ID
     final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
@@ -106,7 +106,7 @@ class PetRepository {
 
     // Sync to remote
     try {
-      await _petService.addPet(
+      final newPet = await _petService.addPet(
         name: name,
         type: type,
         breed: breed,
@@ -120,9 +120,13 @@ class PetRepository {
         nextCheckup: nextCheckup,
       );
 
-      // Trigger full sync to get real ID and replace temp
-      await syncPets();
-      return tempId;
+      // Remove temp optimistic record
+      await _db.deletePet(tempId);
+      
+      // Add real record
+      await _db.upsertPet(_mapPetToCompanion(newPet));
+
+      return newPet.id;
     } catch (e) {
       // Leave as pending for later sync
     }
@@ -215,7 +219,7 @@ class PetRepository {
     
     for (final pet in pending) {
       try {
-        await _petService.addPet(
+        final newPet = await _petService.addPet(
           name: pet.name,
           type: pet.type,
           breed: pet.breed,
@@ -229,16 +233,11 @@ class PetRepository {
           nextCheckup: pet.nextCheckup,
         );
         
-        // Mark as synced
-        await _db.upsertPet(LocalPetsCompanion(
-          id: Value(pet.id),
-          ownerId: Value(pet.ownerId),
-          name: Value(pet.name),
-          type: Value(pet.type),
-          createdAt: Value(pet.createdAt),
-          syncStatus: const Value('synced'),
-          isSynced: const Value(true),
-        ));
+        // Remove temp pet
+        await _db.deletePet(pet.id);
+        
+        // Add real pet
+        await _db.upsertPet(_mapPetToCompanion(newPet));
       } catch (e) {
         // Leave as pending
       }

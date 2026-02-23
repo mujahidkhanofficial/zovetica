@@ -12,6 +12,7 @@ class StorageService {
     required File file,
     required String bucket,
     String? folder,
+    bool logErrors = true,
   }) async {
     try {
       final userId = SupabaseService.currentUser?.id;
@@ -30,7 +31,9 @@ class StorageService {
       final publicUrl = _client.storage.from(bucket).getPublicUrl(filePath);
       return publicUrl;
     } catch (e) {
-      debugPrint('Error uploading image: $e');
+      if (logErrors) {
+        debugPrint('Error uploading image: $e');
+      }
       return null;
     }
   }
@@ -51,6 +54,31 @@ class StorageService {
       file: file,
       bucket: 'pets',
       folder: petId,
+    );
+  }
+
+  /// Upload payment screenshot.
+  ///
+  /// Primary target is `transactions` bucket. If that bucket is not available
+  /// in the project, falls back to `posts` to avoid blocking payment flow.
+  Future<String?> uploadPaymentScreenshot(File file, {String? folder}) async {
+    final baseFolder = folder ?? DateTime.now().millisecondsSinceEpoch.toString();
+
+    final primary = await uploadImage(
+      file: file,
+      bucket: 'transactions',
+      folder: 'payments/$baseFolder',
+      logErrors: false,
+    );
+
+    if (primary != null) return primary;
+
+    debugPrint('transactions bucket unavailable, falling back to posts bucket for payment screenshot');
+
+    return uploadImage(
+      file: file,
+      bucket: 'posts',
+      folder: 'payment_screenshots/$baseFolder',
     );
   }
 

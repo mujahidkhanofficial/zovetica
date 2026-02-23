@@ -12,6 +12,16 @@ class Appointment {
   final String status;
   final int price;
 
+  // Payment & Wallet Fields
+  final String? paymentRefId;
+  final String? paymentStatus;
+  final double? platformFee;
+  final double? vetEarnings;
+  final String? paymentMethod;
+  final bool? paymentConfirmedByUser;
+  final bool? paymentConfirmedByAdmin;
+  final String? paymentScreenshotUrl;
+
   final String? petId;
   final String? petImage;
   final String? ownerId;
@@ -30,6 +40,14 @@ class Appointment {
     required this.type,
     required this.status,
     this.price = 0,
+    this.paymentRefId,
+    this.paymentStatus,
+    this.platformFee,
+    this.vetEarnings,
+    this.paymentMethod,
+    this.paymentConfirmedByUser,
+    this.paymentConfirmedByAdmin,
+    this.paymentScreenshotUrl,
     this.petId,
     this.petImage,
     this.ownerId,
@@ -55,6 +73,14 @@ class Appointment {
       type: map['type']?.toString() ?? 'Checkup',
       status: map['status']?.toString() ?? 'pending',
       price: map['price'] ?? 0,
+      paymentRefId: map['payment_ref_id']?.toString(),
+      paymentStatus: map['payment_status']?.toString() ?? 'unpaid',
+      platformFee: map['platform_fee'] != null ? double.tryParse(map['platform_fee'].toString()) : null,
+      vetEarnings: map['vet_earnings'] != null ? double.tryParse(map['vet_earnings'].toString()) : null,
+      paymentMethod: map['payment_method']?.toString(),
+      paymentConfirmedByUser: map['payment_confirmed_by_user'] as bool?,
+      paymentConfirmedByAdmin: map['payment_confirmed_by_admin'] as bool?,
+      paymentScreenshotUrl: map['payment_screenshot_url']?.toString(),
       petId: map['pet_id']?.toString(),
       petImage: petData?['image_url'],
       ownerId: map['user_id']?.toString(),

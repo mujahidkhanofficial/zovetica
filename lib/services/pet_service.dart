@@ -8,7 +8,7 @@ class PetService {
   static const String _tableName = 'pets';
 
   /// Add a new pet
-  Future<void> addPet({
+  Future<Pet> addPet({
     required String name,
     required String type,
     String? breed,
@@ -24,7 +24,7 @@ class PetService {
     final userId = SupabaseService.currentUser?.id;
     if (userId == null) throw Exception('User not authenticated');
 
-    await _client.from(_tableName).insert({
+    final response = await _client.from(_tableName).insert({
       'owner_id': userId,
       'name': name,
       'type': type,
@@ -37,7 +37,9 @@ class PetService {
       'emoji': emoji ?? '🐾',
       'image_url': imageUrl,
       'next_checkup': nextCheckup?.toIso8601String(),
-    });
+    }).select().single();
+    
+    return Pet.fromMap(response);
   }
 
   /// Get all pets for current user

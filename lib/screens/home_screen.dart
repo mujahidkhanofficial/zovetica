@@ -24,6 +24,7 @@ import 'community_screen.dart';
 import 'profile_screen.dart';
 import 'pet_details_screen.dart';
 import 'add_pet_screen.dart';
+import 'transaction_history_screen.dart';
 import 'simple_chat_list_screen.dart';
 import 'notification_screen.dart';
 import 'ai_chat_screen.dart';
@@ -34,8 +35,11 @@ import '../utils/app_notifications.dart';
 import 'admin/admin_dashboard_screen.dart';
 
 import 'package:pets_and_vets/services/supabase_service.dart';
+import 'package:pets_and_vets/services/appointment_service.dart';
+import 'package:pets_and_vets/widgets/upcoming_appointment_card.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:pets_and_vets/screens/auth_screen.dart';
+import 'package:pets_and_vets/screens/payment_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final bool isAdmin;
@@ -51,11 +55,15 @@ class _HomeScreenState extends State<HomeScreen> {
   final AuthService _authService = AuthService();
   final PetService _petService = PetService();
   final NotificationService _notificationService = NotificationService();
+  final AppointmentService _appointmentService = AppointmentService();
   final PetRepository _petRepo = PetRepository.instance;
   final UserRepository _userRepo = UserRepository.instance;
 
   String _username = "";
   List<Pet> _pets = [];
+  Map<String, dynamic>? _latestAppointment; // For dashboard card
+  Map<String, dynamic>? _paymentSummary;
+  bool _isPaymentSummaryLoading = false;
 
   // Mock Daily Tasks for Dashboard
   final List<Map<String, dynamic>> _dailyTasks = [
@@ -72,6 +80,8 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _fetchUser();
     _fetchPets();
+    _fetchLatestAppointment();
+    _fetchPaymentSummary();
     _setupUserSubscription();
     
     // Start notification listener for real-time push notifications
@@ -133,6 +143,91 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } catch (e) {
       debugPrint('Error fetching pets: $e');
+    }
+  }
+
+  Future<void> _fetchLatestAppointment() async {
+    try {
+       final appointments = await _appointmentService.getUserAppointments();
+       // Filter pending or confirmed upcoming
+       final upcoming = appointments.where((a) {
+         final date = DateTime.tryParse(a.date.toString());
+         if (date == null) return false;
+         return date.isAfter(DateTime.now().subtract(const Duration(hours: 24))) && 
+                (a.status == 'pending' || a.status == 'confirmed' || a.status == 'accepted' || a.status == 'pending_payment');
+       }).toList();
+
+       if (upcoming.isNotEmpty) {
+         // Sort by date soonest
+         upcoming.sort((a, b) => a.date.compareTo(b.date));
+         final latest = upcoming.first;
+         
+         // Fetch doctor info if simple model doesn't have it fully
+         // Assuming appointment model has basic doctorName
+         
+         setState(() {
+           _latestAppointment = {
+             'id': latest.id,
+             'doctorName': latest.doctor.isNotEmpty ? latest.doctor : 'Processing',
+             'date': latest.date,
+             'time': latest.time,
+             'status': latest.status,
+             'type': latest.type,
+             'petName': latest.pet.isNotEmpty ? latest.pet : 'Pet',
+              'price': latest.price,
+              'paymentConfirmed': latest.paymentConfirmedByUser == true,
+              'paymentStatus': (latest.paymentStatus ?? '').toLowerCase(),
+           };
+         });
+       } else {
+         setState(() => _latestAppointment = null);
+       }
+    } catch (e) {
+      debugPrint('Error fetching latest appointment: $e');
+    }
+  }
+
+  Future<void> _fetchPaymentSummary() async {
+    setState(() => _isPaymentSummaryLoading = true);
+    try {
+      final appointments = await _appointmentService.getUserAppointments();
+
+      final paymentRows = appointments.where((a) {
+        final paymentStatus = (a.paymentStatus ?? '').toLowerCase();
+        return a.paymentConfirmedByUser == true ||
+            ['pending_admin', 'paid_to_platform', 'completed', 'refunded'].contains(paymentStatus);
+      }).toList();
+
+      double totalSent = 0;
+      int awaitingCount = 0;
+      int completedCount = 0;
+
+      for (final appt in paymentRows) {
+        totalSent += appt.price.toDouble();
+        final paymentStatus = (appt.paymentStatus ?? '').toLowerCase();
+        if (paymentStatus == 'pending_admin') {
+          awaitingCount++;
+        } else if (paymentStatus == 'paid_to_platform' || paymentStatus == 'completed') {
+          completedCount++;
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _paymentSummary = {
+            'totalSent': totalSent,
+            'awaitingCount': awaitingCount,
+            'completedCount': completedCount,
+            'totalTransactions': paymentRows.length,
+          };
+          _isPaymentSummaryLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isPaymentSummaryLoading = false);
+      }
+      debugPrint('Error fetching payment summary: $e');
     }
   }
 
@@ -246,6 +341,8 @@ class _HomeScreenState extends State<HomeScreen> {
           await Future.wait([
             _fetchUser(),
             _fetchPets(),
+            _fetchLatestAppointment(),
+            _fetchPaymentSummary(),
           ]);
         },
         child: SingleChildScrollView(
@@ -354,6 +451,18 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             
             // Main Content
+            if (_latestAppointment != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+                child: UpcomingAppointmentCard(
+                  appointment: _latestAppointment!,
+                  onRefresh: () {
+                     _fetchLatestAppointment();
+                     _fetchUser();
+                  },
+                ),
+              ),
+
             Padding(
               padding: const EdgeInsets.all(AppSpacing.lg),
               child: Column(
@@ -361,6 +470,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   // Quick Actions Grid
                   _buildQuickActionsGrid(),
+                  const SizedBox(height: AppSpacing.xl),
+
+                  _buildPaymentSection(),
                   const SizedBox(height: AppSpacing.xl),
 
                   // Daily Care Timeline
@@ -432,6 +544,172 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
       ],
+    );
+  }
+
+  Widget _buildPaymentSection() {
+    final summary = _paymentSummary;
+    final totalSent = (summary?['totalSent'] as double?) ?? 0.0;
+    final awaitingCount = (summary?['awaitingCount'] as int?) ?? 0;
+    final completedCount = (summary?['completedCount'] as int?) ?? 0;
+    final totalTransactions = (summary?['totalTransactions'] as int?) ?? 0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader(
+          'Payments',
+          Icons.account_balance_wallet_rounded,
+          action: 'History',
+          onAction: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const TransactionHistoryScreen()),
+            );
+          },
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: AppShadows.card,
+          ),
+          child: _isPaymentSummaryLoading
+              ? const SizedBox(
+                  height: 86,
+                  child: Center(child: CircularProgressIndicator(strokeWidth: 2.2)),
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Total Sent to Vets',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.slate,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'PKR ${totalSent.toStringAsFixed(0)}',
+                                style: const TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.charcoal,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withAlpha(20),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(
+                            Icons.payments_rounded,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildPaymentMetric(
+                            'Awaiting Verify',
+                            '$awaitingCount',
+                            Colors.orange,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _buildPaymentMetric(
+                            'Processed',
+                            '$completedCount',
+                            AppColors.secondary,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _buildPaymentMetric(
+                            'Transactions',
+                            '$totalTransactions',
+                            AppColors.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const TransactionHistoryScreen()),
+                          );
+                        },
+                        icon: const Icon(Icons.receipt_long_rounded),
+                        label: const Text('View Transaction History'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          side: BorderSide(color: AppColors.primary.withAlpha(120)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPaymentMetric(String label, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      decoration: BoxDecoration(
+        color: color.withAlpha(18),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 11,
+              color: AppColors.slate,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
